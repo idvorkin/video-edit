@@ -27,7 +27,7 @@ class FrameState:
 
 
 analysis_fps = 10
-output_fps = 120
+output_fps = 1000
 
 
 def remove_ring_timestamp(frame):
@@ -59,6 +59,7 @@ def analyze(state: FrameState, frame):
     tmp = cv2.absdiff(blur, state.last_analysis_frame)
     state.last_analysis_frame =  blur
 
+
     # tmp = cv2.subtract(skeleton, state.last_analysis_frame)
     # tmp = np.clip(tmp, 0, None)  # bound array between 0 and None
 
@@ -73,31 +74,18 @@ def analyze(state: FrameState, frame):
         # tmp, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2
     )
     tmp = cv2.dilate(tmp, None, iterations = 1)
+    kernel = np.ones((10,10),np.uint8)
+    tmp = cv2.morphologyEx(tmp, cv2.MORPH_OPEN, kernel)
+    tmp = cv2.bitwise_not(tmp)
 
 
-    # element = cv.CreateStructuringElementEx(5*2+1, 5*2+1, 5, 5,  cv.CV_SHAPE_RECT)
-    # cv.MorphologyEx(res, res, None, None, cv.CV_MOP_OPEN)
-    # cv.MorphologyEx(res, res, None, None, cv.CV_MOP_CLOSE)
-    # cv.Threshold(res, res, 10, 255, cv.CV_THRESH_BINARY_INV)
+
+
 
     # Mask out the motion
     # mask = cv2.bitwise_not(cv2.bitwise_not(tmp))
     # ic(mask)
     # tmp = cv2.bitwise_and(frame, mask)
-
-    cnts,_ = cv2.findContours(tmp,
-                            cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    for contour in cnts:
-        if cv2.contourArea(contour) < 500:
-            continue
-
-        (x, y, w, h) = cv2.boundingRect(contour)
-        if (x,y) == (0,0):
-            continue
-
-        ic((state.idx,x,y,w,h))
-        # making green rectangle arround the moving object
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
 
     # tmp = tmp
     state.last_analysis_diff = tmp
@@ -141,6 +129,11 @@ def main():
     ic(stream.isOpened())
     state = FrameState(0, 0, 0)
 
+    name = 'output.mp4'
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    output = cv2.VideoWriter(name, fourcc, 20.0, (1920,1200))
+
+
     while True:
         state.idx += 1
         # grab the frame from the threaded video file stream, resize
@@ -183,6 +176,7 @@ def main():
 
         cv2.imshow("Input", resize(in_frame))
         cv2.imshow("Frame", resize(frame))
+        output.write(in_frame)
         display_duration_ms = int(
             duration(seconds=1 / output_fps).total_seconds() * 1000
         )
@@ -197,6 +191,7 @@ def main():
 
     # do a bit of cleanup
     cv2.destroyAllWindows()
+    output.release()
 
 
 main()
