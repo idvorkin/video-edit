@@ -42,13 +42,12 @@ def remove_ring_timestamp(frame):
     return cv2.rectangle(frame, start_point, end_point, color, thickness)
 
 
-
 def analyze(state: FrameState, frame):
     is_analysis_frame = state.idx % analysis_fps == 0
     if not is_analysis_frame:
         # to see input video, return frame when not analysis
-        # return frame
-        return state.last_analysis_diff
+        return frame
+        # return state.last_analysis_diff
 
     skeleton = skeletonize(frame, size=(10, 10))
 
@@ -61,12 +60,17 @@ def analyze(state: FrameState, frame):
 
     skeleton = cv2.blur(skeleton, (20, 20))
     tmp = cv2.absdiff(skeleton, state.last_analysis_frame)
-    #tmp = cv2.subtract(skeleton, state.last_analysis_frame)
-    tmp = np.clip(tmp, 0, None) # bound array between 0 and None
+    # tmp = cv2.subtract(skeleton, state.last_analysis_frame)
+    tmp = np.clip(tmp, 0, None)  # bound array between 0 and None
 
     # Threshold
     tmp = cv2.adaptiveThreshold(
-        tmp, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+        tmp,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        11,
+        2
         # tmp, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2
     )
 
@@ -78,12 +82,15 @@ def analyze(state: FrameState, frame):
     state.last_analysis_diff = tmp
     return state.last_analysis_diff
 
+
 # Gray Scale Frame
 def to_grayscale(f):
     return cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
 
+
 def to_blur(f):
     return cv2.blur(f, (20, 20))
+
 
 def process_frame(state: FrameState, frame):
 
