@@ -30,43 +30,47 @@ analysis_fps = 30
 output_fps = 120
 
 
-def process_frame(state: FrameState, in_frame):
-    # Gray Scale Frame
-    gray = cv2.cvtColor(in_frame, cv2.COLOR_BGR2GRAY)
+def remove_ring_timestamp(frame):
+    max_y, max_x = frame.shape[0], frame.shape[1]
+    start_point = (0 + int(max_x * 0.7), max_y - 100)
+    bottom_right = max_x, max_y
+    end_point = bottom_right
+    color = (0, 0, 0)
+    fill_rectangle_thickness = -1
+    thickness = fill_rectangle_thickness
+
+    return cv2.rectangle(frame, start_point, end_point, color, thickness)
+
+
+# Gray Scale Frame
+def to_grayscale(f):
+    return cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+
+
+def process_frame(state: FrameState, frame):
+
+    transforms = [remove_ring_timestamp, to_grayscale]
+    for t in transforms:
+        frame = t(frame)
 
     # Running 60 FPS input
     # Only skeletonize every second
     is_analysis_frame = state.idx % analysis_fps == 0
-    frame = gray
     if is_analysis_frame:
-        skeleton = skeletonize(gray, size=(3, 3))
+        skeleton = skeletonize(frame, size=(3, 3))
         # frame = skeleton
         frame_hash = np.sum(skeleton)
         state.frame_hash_diff = state.frame_hash_old - frame_hash
         state.frame_hash_old = frame_hash
-    else:
-        return
+        return frame
 
-    cv2.putText(
-        frame,
-        f"{state.idx}:{state.frame_hash_diff}",
-        (10, 30),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        (255, 255, 255),
-        2,
-    )
-
-    # Skip every 100 frames
-    cv2.imshow("Frame", frame)
-    display_duration_ms = int(duration(seconds=1 / output_fps).total_seconds() * 1000)
-    cv2.waitKey(display_duration_ms)
+    return frame
 
 
 def main():
     print("Hello")
     input_file = "in.mp4"
-    out_file = "unique.mp4"
+    # out_file = "unique.mp4"
     fvs = FileVideoStream(input_file)
     # start the FPS timer
     fps = FPS().start()
@@ -75,26 +79,40 @@ def main():
     ic(fvs)
     stream = cv2.VideoCapture(input_file)
     ic(stream.isOpened())
-    count_frames = 0
-    frame_state = FrameState(0, 0, 0)
+    state = FrameState(0, 0, 0)
 
     while True:
-        count_frames += 1
+        state.idx += 1
         # grab the frame from the threaded video file stream, resize
         # it, and convert it to grayscale (while still retaining 3
         # channels)
         ret, in_frame = stream.read()
         if not ret:
             break
-        frame_state.idx = count_frames
-        process_frame(frame_state, in_frame)
+        frame = process_frame(state, in_frame)
+
+        cv2.putText(
+            frame,
+            f"{state.idx}:{state.frame_hash_diff}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),
+            2,
+        )
+
+        cv2.imshow("Frame", frame)
+        display_duration_ms = int(
+            duration(seconds=1 / output_fps).total_seconds() * 1000
+        )
+        cv2.waitKey(display_duration_ms)
         fps.update()
 
     # stop the timer and display FPS information
     fps.stop()
     ic(fps.elapsed())
     ic(fps.fps())
-    ic(count_frames)
+    ic(state.idx)
 
     # do a bit of cleanup
     cv2.destroyAllWindows()
