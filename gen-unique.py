@@ -12,8 +12,9 @@
 
 from imutils.video import FileVideoStream, FPS
 from icecream import ic
-import cv2
+from pendulum import duration
 import time
+import cv2
 
 
 def main():
@@ -51,13 +52,16 @@ def main():
         # display the size of the queue on the frame
         cv2.putText(
             frame,
-            "Queue Size: {}".format(fvs.Q.qsize()),
+            f"{count_frames}",
             (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
             (0, 255, 0),
             2,
         )
+        cv2.imshow('image',frame)
+        display_duration_ms =  int(duration(seconds=1/60).total_seconds()*1000)
+        cv2.waitKey(display_duration_ms)
         fps.update()
 
     # stop the timer and display FPS information
