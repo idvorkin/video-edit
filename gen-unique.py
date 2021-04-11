@@ -46,22 +46,21 @@ def analyze(state: FrameState, frame):
     is_analysis_frame = state.idx % analysis_fps == 0
     if not is_analysis_frame:
         # to see input video, return frame when not analysis
-        return frame
-        # return state.last_analysis_diff
-
-    skeleton = skeletonize(frame, size=(10, 10))
+        # return frame
+        return state.last_analysis_diff
 
     is_first_frame = state.idx == 0
     initialize_state = is_first_frame
     if initialize_state:
-        state.last_analysis_frame = skeleton
-        state.last_analysis_diff = skeleton
-        return skeleton
+        state.last_analysis_frame = frame
+        return frame
 
-    skeleton = cv2.blur(skeleton, (20, 20))
-    tmp = cv2.absdiff(skeleton, state.last_analysis_frame)
+    blur  = cv2.blur(frame, (20, 20))
+    tmp = cv2.absdiff(blur, state.last_analysis_frame)
+    state.last_analysis_frame =  blur
+
     # tmp = cv2.subtract(skeleton, state.last_analysis_frame)
-    tmp = np.clip(tmp, 0, None)  # bound array between 0 and None
+    # tmp = np.clip(tmp, 0, None)  # bound array between 0 and None
 
     # Threshold
     tmp = cv2.adaptiveThreshold(
@@ -78,9 +77,8 @@ def analyze(state: FrameState, frame):
     # cv.MorphologyEx(res, res, None, None, cv.CV_MOP_OPEN)
     # cv.MorphologyEx(res, res, None, None, cv.CV_MOP_CLOSE)
     # cv.Threshold(res, res, 10, 255, cv.CV_THRESH_BINARY_INV)
-    state.last_analysis_frame = skeleton
     state.last_analysis_diff = tmp
-    return state.last_analysis_diff
+    return tmp
 
 
 # Gray Scale Frame
@@ -131,7 +129,7 @@ def main():
         frame = process_frame(state, in_frame)
 
         cv2.putText(
-            frame,
+            in_frame,
             f"{state.idx}:{state.last_analysis_diff}",
             (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX,
@@ -139,8 +137,29 @@ def main():
             (255, 255, 255),
             2,
         )
+        cv2.putText(
+            frame,
+            f"{state.idx}:{state.last_analysis_diff}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 0),
+            2,
+        )
 
-        cv2.imshow("Frame", frame)
+        def resize(src):
+            if not isinstance(src, np.ndarray):
+                return src
+
+            #calculate the 50 percent of original dimensions
+            scale_percent=50
+            width = int(src.shape[1] * scale_percent / 100)
+            height = int(src.shape[0] * scale_percent / 100)
+            dsize = (width, height)
+            return cv2.resize(src, dsize)
+
+        cv2.imshow("Input", resize(in_frame))
+        cv2.imshow("Frame", resize(frame))
         display_duration_ms = int(
             duration(seconds=1 / output_fps).total_seconds() * 1000
         )
