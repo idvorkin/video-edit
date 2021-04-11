@@ -26,7 +26,7 @@ class FrameState:
     last_analysis_diff: any
 
 
-analysis_fps = 30
+analysis_fps = 10
 output_fps = 120
 
 
@@ -55,7 +55,7 @@ def analyze(state: FrameState, frame):
         state.last_analysis_frame = frame
         return frame
 
-    blur  = cv2.blur(frame, (20, 20))
+    blur  = cv2.blur(frame, (5, 5))
     tmp = cv2.absdiff(blur, state.last_analysis_frame)
     state.last_analysis_frame =  blur
 
@@ -72,11 +72,34 @@ def analyze(state: FrameState, frame):
         2
         # tmp, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2
     )
+    tmp = cv2.dilate(tmp, None, iterations = 1)
+
 
     # element = cv.CreateStructuringElementEx(5*2+1, 5*2+1, 5, 5,  cv.CV_SHAPE_RECT)
     # cv.MorphologyEx(res, res, None, None, cv.CV_MOP_OPEN)
     # cv.MorphologyEx(res, res, None, None, cv.CV_MOP_CLOSE)
     # cv.Threshold(res, res, 10, 255, cv.CV_THRESH_BINARY_INV)
+
+    # Mask out the motion
+    # mask = cv2.bitwise_not(cv2.bitwise_not(tmp))
+    # ic(mask)
+    # tmp = cv2.bitwise_and(frame, mask)
+
+    cnts,_ = cv2.findContours(tmp,
+                            cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in cnts:
+        if cv2.contourArea(contour) < 500:
+            continue
+
+        (x, y, w, h) = cv2.boundingRect(contour)
+        if (x,y) == (0,0):
+            continue
+
+        ic((state.idx,x,y,w,h))
+        # making green rectangle arround the moving object
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
+
+    # tmp = tmp
     state.last_analysis_diff = tmp
     return tmp
 
