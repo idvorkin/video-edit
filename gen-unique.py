@@ -17,11 +17,13 @@ from pendulum import duration
 import cv2
 import numpy as np
 from dataclasses import dataclass
+import copy
 
 
 @dataclass
 class FrameState:
     idx: any
+    frame: any
     last_analysis_frame: any
     last_analysis_diff: any
 
@@ -74,20 +76,14 @@ def analyze(state: FrameState, frame):
         # tmp, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2
     )
     tmp = cv2.dilate(tmp, None, iterations = 1)
-    kernel = np.ones((10,10),np.uint8)
+    kernel = np.ones((200,200),np.uint8)
     tmp = cv2.morphologyEx(tmp, cv2.MORPH_OPEN, kernel)
-    tmp = cv2.bitwise_not(tmp)
-
-
-
 
 
     # Mask out the motion
-    # mask = cv2.bitwise_not(cv2.bitwise_not(tmp))
-    # ic(mask)
-    # tmp = cv2.bitwise_and(frame, mask)
+    mask = cv2.bitwise_not(tmp)
+    tmp = cv2.bitwise_and(state.frame,state.frame,mask=mask)
 
-    # tmp = tmp
     state.last_analysis_diff = tmp
     return tmp
 
@@ -127,7 +123,7 @@ def main():
     ic(fvs)
     stream = cv2.VideoCapture(input_file)
     ic(stream.isOpened())
-    state = FrameState(0, 0, 0)
+    state = FrameState(np.ones(1),0, 0, 0)
 
     name = 'output.mp4'
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -135,13 +131,15 @@ def main():
 
 
     while True:
-        state.idx += 1
         # grab the frame from the threaded video file stream, resize
         # it, and convert it to grayscale (while still retaining 3
         # channels)
         ret, in_frame = stream.read()
+        state.idx += 1
+        state.frame = np.copy(in_frame)
         if not ret:
             break
+
         frame = process_frame(state, in_frame)
 
         cv2.putText(
