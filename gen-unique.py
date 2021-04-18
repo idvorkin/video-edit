@@ -46,8 +46,6 @@ color_grey = 127
 @dataclass
 class FrameState:
     idx: any
-    frame: any
-    last_analysis_frame: any
     last_fg_mask: any
 
 
@@ -115,7 +113,9 @@ def to_contours(frame):
     contour_color = color_grey  # Black
     contour_thickness_fill = -1
     good_contours = [c for c in contours if cv2.contourArea(c) > 100]
-    frame = cv2.drawContours(frame, good_contours, draw_all_counters, contour_color, contour_thickness_fill)
+    frame = cv2.drawContours(
+        frame, good_contours, draw_all_counters, contour_color, contour_thickness_fill
+    )
 
     # Dialate again to try and fill holes
     dialate_kernel = square_kernel(200)
@@ -141,8 +141,10 @@ def analyze(state: FrameState, frame):
 def to_grayscale(f):
     return cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
 
+
 def to_blur(f):
     return cv2.blur(f, (20, 20))
+
 
 def process_frame(state: FrameState, frame):
 
@@ -176,6 +178,7 @@ def burn_in_debug_info(frame, state, in_fps):
         2,
     )
 
+
 def is_frame_black(frame):
     # Even mostly black images have some noise, set a threshold
     percent_image_non_zero_still_black = 0.1
@@ -186,9 +189,12 @@ def is_frame_black(frame):
     count_non_zero = np.count_nonzero(frame)
     return count_non_zero < non_zero_pixels_in_black_image
 
+
 def video_reader(input_video):
-    ret, frame = input_video.read()
-    while ret:
+    while True:
+        ret, frame = input_video.read()
+        if not ret:
+            return
         yield frame
 
 
@@ -197,49 +203,41 @@ def main(input_file):
     fps = FPS().start()
     input_video = cv2.VideoCapture(input_file)
     ic(input_video.isOpened())
-    state = FrameState(0, 0, 0, 0)
+    state = FrameState(0, 0)
 
     width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
     height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
     in_fps = input_video.get(cv2.CAP_PROP_FPS)  # float `height`
     frame_count = int(input_video.get(cv2.CAP_PROP_FRAME_COUNT))
-    ic (width, height, in_fps, frame_count)
+    ic(width, height, in_fps, frame_count)
 
     def output_video_writer(name):
-       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-       return cv2.VideoWriter(name, fourcc, in_fps, (int(width), int(height)))
-
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        return cv2.VideoWriter(name, fourcc, in_fps, (int(width), int(height)))
 
     output_unique = output_video_writer("output_unique.mp4")
     output_unique_mask = output_video_writer("output_unique_masked.mp4")
 
     with typer.progressbar(length=frame_count, label="Processing Video") as progress:
-        #for (idx, in_frame) in enumerate(video_reader(input_video)):
-        for idx in range (int(frame_count)):
-            ret, in_frame = input_video.read()
-
+        for (idx, in_frame) in enumerate(video_reader(input_video)):
             fps.update()  # update FPS first so can continue early.
             progress.update(1)
-            ic (idx)
 
             state.idx = idx
-            state.frame = np.copy(in_frame)
-
             motion_mask = process_frame(state, in_frame)
 
             # only write output frame if frame is not block
             if is_frame_black(motion_mask):
-                pass
-                # continue
+                continue
 
             burn_in_debug_info(motion_mask, state, in_fps)
             burn_in_debug_info(in_frame, state, in_fps)
+            masked_input = cv2.bitwise_and(in_frame, in_frame, mask=motion_mask)
 
             cv2.imshow("Input", shrink_image_half(in_frame))
             cv2.imshow("Mask", shrink_image_half(motion_mask))
-
-            masked_input = cv2.bitwise_and(in_frame, in_frame, mask=motion_mask)
             cv2.imshow("Motion Mask", shrink_image_half(masked_input))
+
             cv2.waitKey(1)
 
             output_unique_mask.write(motion_mask)
