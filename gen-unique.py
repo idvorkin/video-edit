@@ -16,17 +16,21 @@
 ############
 #   - https://docs.opencv.org/3.4/d1/dc5/tutorial_background_subtraction.html
 
-from imutils.video import FileVideoStream, FPS
-from imutils import skeletonize
+
+# TODOs
+# There are a few inter frame artifacts to clean up, consider 2 pass
+# 1 pass build the masks
+# 2 clean up things we can detect inter frame
+# E.g. 10s motion -> 2s no_motion -> 10s motion, should assume motion in between
+
+
+from imutils.video import FPS
 from icecream import ic
 from pendulum import duration
 import cv2
 import numpy as np
 from dataclasses import dataclass
-import copy
-from typing import Optional
 import typer
-from pathlib import Path
 
 app = typer.Typer()
 
@@ -60,7 +64,6 @@ def remove_ring_timestamp(frame):
     color = (0, 0, 0)
     fill_rectangle_thickness = -1
     thickness = fill_rectangle_thickness
-
     return cv2.rectangle(frame, start_point, end_point, color, thickness)
 
 
@@ -153,7 +156,7 @@ def to_blur(f):
 
 def process_frame(state: FrameState, frame):
 
-    transforms = [remove_ring_timestamp, to_grayscale]
+    transforms = [to_grayscale]
     for t in transforms:
         frame = t(frame)
 
@@ -165,78 +168,87 @@ def process_frame(state: FrameState, frame):
     return frame
 
 
-def main(input_file):
-    if input_file == None:
-        input_file = "in.mp4"
+def shrink_image_half(src):
+    if not isinstance(src, np.ndarray):
+        return src
 
-    # out_file = "unique.mp4"
-    fvs = FileVideoStream(input_file)
+    # calculate the 50 percent of original dimensions
+    scale_percent = 50
+    width = int(src.shape[1] * scale_percent / 100)
+    height = int(src.shape[0] * scale_percent / 100)
+    dsize = (width, height)
+    return cv2.resize(src, dsize)
+
+
+def burn_in_debug_info(frame, state, count_non_zero, in_fps):
+    cv2.putText(
+        frame,
+        f"{int(state.idx/in_fps)}:{state.idx}:{count_non_zero}",
+        (10, 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (255, 255, 255),
+        2,
+    )
+
+
+def main(input_file):
     # start the FPS timer
     fps = FPS().start()
-    ic(input_file)
-    ic(fps)
-    ic(fvs)
-    stream = cv2.VideoCapture(input_file)
-    ic(stream.isOpened())
+    input_video = cv2.VideoCapture(input_file)
+    ic(input_video.isOpened())
     state = FrameState(0, 0, 0, 0)
 
-    name = "output.mov"
+    width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
+    height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
+    in_fps = input_video.get(cv2.CAP_PROP_FPS)  # float `height`
+    frame_count = input_video.get(cv2.CAP_PROP_FRAME_COUNT)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    output = cv2.VideoWriter(name, fourcc, 20.0, (1920, 1200))
+    output_unique = cv2.VideoWriter(
+        "output_unique.mp4", fourcc, in_fps, (int(width), int(height))
+    )
+    output_unique_mask = cv2.VideoWriter(
+        "output_unique_masked.mp4", fourcc, in_fps, (int(width), int(height))
+    )
 
-    while True:
-        # grab the frame from the threaded video file stream, resize
-        # it, and convert it to grayscale (while still retaining 3
-        # channels)
-        ret, in_frame = stream.read()
-        state.idx += 1
-        state.frame = np.copy(in_frame)
-        if not ret:
-            break
+    # Even black images have some noise
+    # lets say
+    percent_image_non_zero_still_blank = 0.1
+    non_zero_pixels_in_black_image = int(
+        0.01 * percent_image_non_zero_still_blank * width * height
+    )
+    ic(non_zero_pixels_in_black_image)
 
-        frame = process_frame(state, in_frame)
+    with typer.progressbar(range(int(frame_count)), label="Processing Video") as frames:
+        for frame in frames:  # Hack,
+            fps.update()  # update FPS first so can continue early.
 
-        cv2.putText(
-            in_frame,
-            f"{state.idx}:{state.last_fg_mask}",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 255),
-            2,
-        )
-        cv2.putText(
-            frame,
-            f"{state.idx}:{state.last_fg_mask}",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 255),
-            2,
-        )
+            ret, in_frame = input_video.read()
+            state.idx = frame
+            state.frame = np.copy(in_frame)
+            assert ret
 
-        def resize(src):
-            if not isinstance(src, np.ndarray):
-                return src
+            frame = process_frame(state, in_frame)
 
-            # calculate the 50 percent of original dimensions
-            scale_percent = 50
-            width = int(src.shape[1] * scale_percent / 100)
-            height = int(src.shape[0] * scale_percent / 100)
-            dsize = (width, height)
-            return cv2.resize(src, dsize)
+            # only write output frame if mask is non_zero
+            count_non_zero = np.count_nonzero(frame)
 
-        cv2.imshow("Input", resize(in_frame))
-        cv2.imshow("Mask", resize(frame))
-        cv2.imshow(
-            "MaskedInput", resize(cv2.bitwise_and(in_frame, in_frame, mask=frame))
-        )
-        output.write(in_frame)
-        display_duration_ms = int(
-            duration(seconds=1 / output_fps).total_seconds() * 1000
-        )
-        cv2.waitKey(display_duration_ms)
-        fps.update()
+            if count_non_zero < non_zero_pixels_in_black_image:
+                continue
+
+            burn_in_debug_info(frame, state, count_non_zero, in_fps)
+            burn_in_debug_info(in_frame, state, count_non_zero, in_fps)
+
+            cv2.imshow("Input", shrink_image_half(in_frame))
+            cv2.imshow("Mask", shrink_image_half(frame))
+
+            masked_input = cv2.bitwise_and(in_frame, in_frame, mask=frame)
+            cv2.imshow("MaskedInput", shrink_image_half(masked_input))
+            cv2.waitKey(1)
+
+            # ic (state.idx,count_non_zero)
+            output_unique_mask.write(masked_input)
+            output_unique.write(in_frame)
 
     # stop the timer and display FPS information
     fps.stop()
@@ -246,14 +258,18 @@ def main(input_file):
 
     # do a bit of cleanup
     cv2.destroyAllWindows()
-    output.release()
+    output_unique_mask.release()
+    output_unique.release()
+
 
 @app.command()
-def RemoveBackground(video_input_file: Optional[Path] = typer.Argument(None)) -> None:
+def RemoveBackground(video_input_file: str = typer.Argument("in.mp4")) -> None:
     """
     Remove background from Ring Video
     """
+    ic(video_input_file)
     return main(video_input_file)
+
 
 if __name__ == "__main__":
     app()
