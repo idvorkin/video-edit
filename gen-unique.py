@@ -240,7 +240,7 @@ def main(input_file):
 
             cv2.waitKey(1)
 
-            output_unique_mask.write(motion_mask)
+            output_unique_mask.write(masked_input)
             output_unique.write(in_frame)
 
     # stop the timer and display FPS information
