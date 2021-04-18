@@ -26,7 +26,6 @@
 
 from imutils.video import FPS
 from icecream import ic
-from pendulum import duration
 import cv2
 import numpy as np
 from dataclasses import dataclass
@@ -52,11 +51,13 @@ class FrameState:
     last_fg_mask: any
 
 
-analysis_key_frame_rate = 15
-output_fps = 1000
+# Input is 20FPS, analyze every 1/2 second
+# TBD compute this.
+
+analysis_key_frame_rate = 10
 
 
-def remove_ring_timestamp(frame):
+def obsolete_handled_by_bg_remover_remove_ring_timestamp(frame):
     max_y, max_x = frame.shape[0], frame.shape[1]
     start_point = (0 + int(max_x * 0.7), max_y - 100)
     bottom_right = max_x, max_y
@@ -67,7 +68,7 @@ def remove_ring_timestamp(frame):
     return cv2.rectangle(frame, start_point, end_point, color, thickness)
 
 
-def threshold(frame):
+def to_black_and_white(frame):
     color_threshold = 127
     convert_to_color = color_white
 
@@ -93,13 +94,12 @@ def square_kernel(side):
 
 def to_contours(frame):
 
-    frame = threshold(frame)
+    frame = to_black_and_white(frame)
 
     # Remove artifact noise, 10x10 seems like plenty
-    erode_kernel = square_kernel(10)
     frame = cv2.erode(frame, square_kernel(10))
 
-    # Without noise, can dialate a fair bit
+    # Without noise, can dialate (fill in) with a decent kernel size.
     frame = cv2.dilate(frame, square_kernel(40))
 
     contouring_method = cv2.RETR_EXTERNAL  # Only outer edges
@@ -110,18 +110,12 @@ def to_contours(frame):
         frame, contouring_method, cv2.CHAIN_APPROX_NONE
     )
 
-    for i, contour in enumerate(contours):
-        if cv2.contourArea(contour) < 100:
-            continue
-        # ic(i)
-
-        ## (4) Create mask and do bitwise-op
-        contour_color = color_grey  # Black
-        contour_index = 0  # drawCounters takes an array and index as input
-        contour_thickness_fill = -1
-        frame = cv2.drawContours(
-            frame, [contour], contour_index, contour_color, contour_thickness_fill
-        )
+    # Draw in the found contours
+    draw_all_counters = -1
+    contour_color = color_grey  # Black
+    contour_thickness_fill = -1
+    good_contours = [c for c in contours if cv2.contourArea(c) > 100]
+    frame = cv2.drawContours(frame, good_contours, draw_all_counters, contour_color, contour_thickness_fill)
 
     # Dialate again to try and fill holes
     dialate_kernel = square_kernel(200)
@@ -135,8 +129,6 @@ def analyze(state: FrameState, frame):
     is_analysis_frame = state.idx % analysis_key_frame_rate == 0
     is_do_analyze = is_analysis_frame or is_first_frame
     if not is_do_analyze:
-        # to see input video, return frame when not analysis
-        # return frame
         return state.last_fg_mask
 
     fgMask = backSub.apply(frame)
@@ -149,10 +141,8 @@ def analyze(state: FrameState, frame):
 def to_grayscale(f):
     return cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
 
-
 def to_blur(f):
     return cv2.blur(f, (20, 20))
-
 
 def process_frame(state: FrameState, frame):
 
@@ -160,12 +150,7 @@ def process_frame(state: FrameState, frame):
     for t in transforms:
         frame = t(frame)
 
-    frame = analyze(state, frame)
-
-    # Running 60 FPS input
-    # Only skeletonize every second
-
-    return frame
+    return analyze(state, frame)
 
 
 def shrink_image_half(src):
@@ -180,16 +165,31 @@ def shrink_image_half(src):
     return cv2.resize(src, dsize)
 
 
-def burn_in_debug_info(frame, state, count_non_zero, in_fps):
+def burn_in_debug_info(frame, state, in_fps):
     cv2.putText(
         frame,
-        f"{int(state.idx/in_fps)}:{state.idx}:{count_non_zero}",
+        f"{int(state.idx/in_fps)}:{state.idx}",
         (10, 30),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.6,
         (255, 255, 255),
         2,
     )
+
+def is_frame_black(frame):
+    # Even mostly black images have some noise, set a threshold
+    percent_image_non_zero_still_black = 0.1
+    total_pixels = frame.shape[0] * frame.shape[1]
+    non_zero_pixels_in_black_image = int(
+        0.01 * percent_image_non_zero_still_black * total_pixels
+    )
+    count_non_zero = np.count_nonzero(frame)
+    return count_non_zero < non_zero_pixels_in_black_image
+
+def video_reader(input_video):
+    ret, frame = input_video.read()
+    while ret:
+        yield frame
 
 
 def main(input_file):
@@ -202,52 +202,47 @@ def main(input_file):
     width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
     height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
     in_fps = input_video.get(cv2.CAP_PROP_FPS)  # float `height`
-    frame_count = input_video.get(cv2.CAP_PROP_FRAME_COUNT)
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    output_unique = cv2.VideoWriter(
-        "output_unique.mp4", fourcc, in_fps, (int(width), int(height))
-    )
-    output_unique_mask = cv2.VideoWriter(
-        "output_unique_masked.mp4", fourcc, in_fps, (int(width), int(height))
-    )
+    frame_count = int(input_video.get(cv2.CAP_PROP_FRAME_COUNT))
+    ic (width, height, in_fps, frame_count)
 
-    # Even black images have some noise
-    # lets say
-    percent_image_non_zero_still_blank = 0.1
-    non_zero_pixels_in_black_image = int(
-        0.01 * percent_image_non_zero_still_blank * width * height
-    )
-    ic(non_zero_pixels_in_black_image)
+    def output_video_writer(name):
+       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+       return cv2.VideoWriter(name, fourcc, in_fps, (int(width), int(height)))
 
-    with typer.progressbar(range(int(frame_count)), label="Processing Video") as frames:
-        for frame in frames:  # Hack,
-            fps.update()  # update FPS first so can continue early.
 
+    output_unique = output_video_writer("output_unique.mp4")
+    output_unique_mask = output_video_writer("output_unique_masked.mp4")
+
+    with typer.progressbar(length=frame_count, label="Processing Video") as progress:
+        #for (idx, in_frame) in enumerate(video_reader(input_video)):
+        for idx in range (int(frame_count)):
             ret, in_frame = input_video.read()
-            state.idx = frame
+
+            fps.update()  # update FPS first so can continue early.
+            progress.update(1)
+            ic (idx)
+
+            state.idx = idx
             state.frame = np.copy(in_frame)
-            assert ret
 
-            frame = process_frame(state, in_frame)
+            motion_mask = process_frame(state, in_frame)
 
-            # only write output frame if mask is non_zero
-            count_non_zero = np.count_nonzero(frame)
+            # only write output frame if frame is not block
+            if is_frame_black(motion_mask):
+                pass
+                # continue
 
-            if count_non_zero < non_zero_pixels_in_black_image:
-                continue
-
-            burn_in_debug_info(frame, state, count_non_zero, in_fps)
-            burn_in_debug_info(in_frame, state, count_non_zero, in_fps)
+            burn_in_debug_info(motion_mask, state, in_fps)
+            burn_in_debug_info(in_frame, state, in_fps)
 
             cv2.imshow("Input", shrink_image_half(in_frame))
-            cv2.imshow("Mask", shrink_image_half(frame))
+            cv2.imshow("Mask", shrink_image_half(motion_mask))
 
-            masked_input = cv2.bitwise_and(in_frame, in_frame, mask=frame)
-            cv2.imshow("MaskedInput", shrink_image_half(masked_input))
+            masked_input = cv2.bitwise_and(in_frame, in_frame, mask=motion_mask)
+            cv2.imshow("Motion Mask", shrink_image_half(masked_input))
             cv2.waitKey(1)
 
-            # ic (state.idx,count_non_zero)
-            output_unique_mask.write(masked_input)
+            output_unique_mask.write(motion_mask)
             output_unique.write(in_frame)
 
     # stop the timer and display FPS information
@@ -256,7 +251,6 @@ def main(input_file):
     ic(fps.fps())
     ic(state.idx)
 
-    # do a bit of cleanup
     cv2.destroyAllWindows()
     output_unique_mask.release()
     output_unique.release()
