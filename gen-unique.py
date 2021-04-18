@@ -20,6 +20,9 @@ from dataclasses import dataclass
 import copy
 
 
+backSub = cv.createBackgroundSubtractorMOG2()
+# backSub = cv.createBackgroundSubtractorKNN()
+
 @dataclass
 class FrameState:
     idx: any
