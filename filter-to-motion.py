@@ -125,17 +125,10 @@ def to_contours(frame):
     return frame
 
 
-def analyze(state: FrameState, frame):
-    is_first_frame = state.idx < 2
-    is_analysis_frame = state.idx % analysis_key_frame_rate == 0
-    is_do_analyze = is_analysis_frame or is_first_frame
-    if not is_do_analyze:
-        return state.last_fg_mask
-
-    fgMask = backSub.apply(frame)
-    fgMask = to_contours(fgMask)
-    state.last_fg_mask = fgMask
-    return state.last_fg_mask
+def to_motion_mask(frame):
+    motion_mask = backSub.apply(frame)
+    motion_mask = to_contours(motion_mask)
+    return motion_mask
 
 def create_analyze_debug_frame(frame, motion_mask):
     masked_input = cv2.bitwise_and(frame, frame, mask=motion_mask)
@@ -155,13 +148,24 @@ def to_blur(f):
     return cv2.blur(f, (20, 20))
 
 
-def process_frame(state: FrameState, frame):
+def to_motion_mask_fast(state: FrameState, frame):
 
-    transforms = [to_grayscale]
-    for t in transforms:
+    # Function is fast because analysis is sampled
+
+    is_first_frame = state.idx < 2
+    is_analysis_frame = state.idx % analysis_key_frame_rate == 0
+    is_do_analyze = is_analysis_frame or is_first_frame
+
+    if not is_do_analyze:
+        return state.last_fg_mask
+
+    fast_transforms = [to_grayscale]
+    for t in fast_transforms:
         frame = t(frame)
 
-    return analyze(state, frame)
+    state.last_fg_mask = to_motion_mask(frame)
+    return state.last_fg_mask
+
 
 
 def shrink_image_half(src):
@@ -229,13 +233,16 @@ def process_video(base_filename: str, input_video):
 
             # PERF: Processing at 1/4 size boosts FPS by TK%
             in_frame = shrink_image_half(original_frame)
-            motion_mask = process_frame(state, in_frame)
 
-            # only write output frame if frame is not black
+
+            # PERF: Motion Mask sampled frames
+            motion_mask = to_motion_mask_fast(state, in_frame)
+
+            # skip frames with no motion
             if is_frame_black(motion_mask):
                 continue
 
-            # PERF - show_debug_window at lower rate boosts FPS by TK%
+            # PERF - show_debug_window at on sampled frames
             if idx % debug_window_refresh_rate == 0:
                 debug_frame = create_analyze_debug_frame(in_frame, motion_mask)
                 burn_in_debug_info(debug_frame, idx, in_fps)
