@@ -30,6 +30,7 @@ import cv2
 import numpy as np
 from dataclasses import dataclass
 import typer
+import os.path
 
 app = typer.Typer()
 
@@ -198,13 +199,13 @@ def video_reader(input_video):
         yield frame
 
 
-def main(input_file):
+def main(input_file, is_overwrite):
     # start the FPS timer
     fps = FPS().start()
     input_video = cv2.VideoCapture(input_file)
     ic(input_video.isOpened())
     state = FrameState(0, 0)
-    base_filename = input_file.split('.')[0]
+    base_filename = input_file.split(".")[0]
 
     width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
     height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
@@ -216,15 +217,26 @@ def main(input_file):
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         return cv2.VideoWriter(name, fourcc, in_fps, (int(width), int(height)))
 
-    output_unique = output_video_writer(f"{base_filename}_unique.mp4")
-    output_unique_mask = output_video_writer(f"{base_filename}_mask.mp4")
+    # if file exists, skip it.
+    # TODO add flag.
+    unique_filename = f"{base_filename}_unique.mp4"
+
+    if not is_overwrite and os.path.exists(unique_filename):
+        print(f"{unique_filename} exists, skipping")
+        return
+
+    output_unique = output_video_writer(unique_filename)
+    # mask_filename  = f"{base_filename}_mask.mp4"
+    # output_unique_mask = output_video_writer(mask_filename)
+    output_video_files = [output_unique]
+    debug_window_refresh_rate = 10
 
     with typer.progressbar(length=frame_count, label="Processing Video") as progress:
         for (idx, original_frame) in enumerate(video_reader(input_video)):
             fps.update()  # update FPS first so can continue early.
             progress.update(1)
 
-            # process at lower fps
+            # PERF: Processing at 1/4 size boosts FPS by TK%
             in_frame = shrink_image_half(original_frame)
             state.idx = idx
             motion_mask = process_frame(state, in_frame)
@@ -233,18 +245,24 @@ def main(input_file):
             if is_frame_black(motion_mask):
                 continue
 
-            burn_in_debug_info(motion_mask, state, in_fps)
-            burn_in_debug_info(in_frame, state, in_fps)
-            masked_input = cv2.bitwise_and(in_frame, in_frame, mask=motion_mask)
+            def show_debug_window():
+                burn_in_debug_info(motion_mask, state, in_fps)
+                burn_in_debug_info(in_frame, state, in_fps)
+                masked_input = cv2.bitwise_and(in_frame, in_frame, mask=motion_mask)
+                mask_3c = cv2.cvtColor(motion_mask, cv2.COLOR_GRAY2BGR)
+                top_row = np.concatenate((in_frame, mask_3c), axis=1)
+                bottom_row = np.concatenate((mask_3c, masked_input), axis=1)
+                merge_image = np.concatenate((top_row, bottom_row), axis=0)
+                cv2.imshow(f"{base_filename} Input", shrink_image_half(merge_image))
+                cv2.waitKey(1)
 
-            cv2.imshow(f"{base_filename} Input", shrink_image_half(in_frame))
-            cv2.imshow(f"{base_filename} Mask", shrink_image_half(motion_mask))
-            cv2.imshow(f"{base_filename} Motion Mask", shrink_image_half(masked_input))
-
-            cv2.waitKey(1)
-
-            output_unique_mask.write(masked_input)
-            output_unique.write(in_frame)
+            if idx % debug_window_refresh_rate == 0:
+                # PERF - show_debug_window at lower rate boosts FPS by TK%
+                show_debug_window()
+            output_unique.write(original_frame)
+            # Note, mask resolution is currently at halved resolution
+            # Either make it full size, **or** change output mask file resolution.
+            # output_unique_mask.write(masked_input)
 
     # stop the timer and display FPS information
     fps.stop()
@@ -253,17 +271,19 @@ def main(input_file):
     ic(state.idx)
 
     cv2.destroyAllWindows()
-    output_unique_mask.release()
-    output_unique.release()
+    for f in output_video_files:
+        f.release()
 
 
 @app.command()
-def RemoveBackground(video_input_file: str = typer.Argument("in.mp4")) -> None:
+def RemoveBackground(
+    video_input_file: str = typer.Argument("in.mp4"), is_overwrite=typer.Argument(False)
+) -> None:
     """
     Remove background from Ring Video
     """
     ic(video_input_file)
-    return main(video_input_file)
+    return main(video_input_file, is_overwrite)
 
 
 if __name__ == "__main__":
