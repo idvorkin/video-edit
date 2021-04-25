@@ -199,13 +199,17 @@ def video_reader(input_video):
         yield frame
 
 
-def main(input_file, is_overwrite):
+def main(input_file):
+
+    base_filename = input_file.split(".")[0]
+    # if file exists, skip it.
+    unique_filename = f"{base_filename}_unique.mp4"
+
     # start the FPS timer
     fps = FPS().start()
     input_video = cv2.VideoCapture(input_file)
     ic(input_video.isOpened())
     state = FrameState(0, 0)
-    base_filename = input_file.split(".")[0]
 
     width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
     height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
@@ -216,14 +220,6 @@ def main(input_file, is_overwrite):
     def output_video_writer(name):
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         return cv2.VideoWriter(name, fourcc, in_fps, (int(width), int(height)))
-
-    # if file exists, skip it.
-    # TODO add flag.
-    unique_filename = f"{base_filename}_unique.mp4"
-
-    if not is_overwrite and os.path.exists(unique_filename):
-        print(f"{unique_filename} exists, skipping")
-        return
 
     output_unique = output_video_writer(unique_filename)
     # mask_filename  = f"{base_filename}_mask.mp4"
@@ -282,8 +278,16 @@ def RemoveBackground(
     """
     Remove background from Ring Video
     """
+    base_filename = video_input_file.split(".")[0]
+    # if file exists, skip it.
+    unique_filename = f"{base_filename}_unique.mp4"
+
+    if not is_overwrite and os.path.exists(unique_filename):
+        print(f"{unique_filename} exists, skipping")
+        return
+
     ic(video_input_file)
-    return main(video_input_file, is_overwrite)
+    return main(video_input_file)
 
 
 if __name__ == "__main__":
