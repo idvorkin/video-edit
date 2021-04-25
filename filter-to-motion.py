@@ -24,6 +24,7 @@
 # E.g. 10s motion -> 2s no_motion -> 10s motion, should assume motion in between
 
 
+from cv_helper import *
 from imutils.video import FPS
 from icecream import ic
 import cv2
@@ -190,23 +191,12 @@ def is_frame_black(frame):
     count_non_zero = np.count_nonzero(frame)
     return count_non_zero < non_zero_pixels_in_black_image
 
-
-def video_reader(input_video):
-    while True:
-        ret, frame = input_video.read()
-        if not ret:
-            return
-        yield frame
-
-
-def main(input_file):
+def process_video(input_file):
 
     base_filename = input_file.split(".")[0]
     # if file exists, skip it.
     unique_filename = f"{base_filename}_unique.mp4"
 
-    # start the FPS timer
-    fps = FPS().start()
     input_video = cv2.VideoCapture(input_file)
     ic(input_video.isOpened())
     state = FrameState(0, 0)
@@ -227,6 +217,8 @@ def main(input_file):
     output_video_files = [output_unique]
     debug_window_refresh_rate = 10
 
+    # start the FPS timer
+    fps = FPS().start()
     with typer.progressbar(length=frame_count, label="Processing Video") as progress:
         for (idx, original_frame) in enumerate(video_reader(input_video)):
             fps.update()  # update FPS first so can continue early.
@@ -287,7 +279,7 @@ def RemoveBackground(
         return
 
     ic(video_input_file)
-    return main(video_input_file)
+    return process_video(video_input_file)
 
 
 if __name__ == "__main__":
