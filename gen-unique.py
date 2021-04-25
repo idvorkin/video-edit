@@ -204,6 +204,7 @@ def main(input_file):
     input_video = cv2.VideoCapture(input_file)
     ic(input_video.isOpened())
     state = FrameState(0, 0)
+    base_filename = input_file.split('.')[0]
 
     width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
     height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
@@ -215,14 +216,16 @@ def main(input_file):
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         return cv2.VideoWriter(name, fourcc, in_fps, (int(width), int(height)))
 
-    output_unique = output_video_writer("output_unique.mp4")
-    output_unique_mask = output_video_writer("output_unique_masked.mp4")
+    output_unique = output_video_writer(f"{base_filename}_unique.mp4")
+    output_unique_mask = output_video_writer(f"{base_filename}_mask.mp4")
 
     with typer.progressbar(length=frame_count, label="Processing Video") as progress:
-        for (idx, in_frame) in enumerate(video_reader(input_video)):
+        for (idx, original_frame) in enumerate(video_reader(input_video)):
             fps.update()  # update FPS first so can continue early.
             progress.update(1)
 
+            # process at lower fps
+            in_frame = shrink_image_half(original_frame)
             state.idx = idx
             motion_mask = process_frame(state, in_frame)
 
@@ -234,9 +237,9 @@ def main(input_file):
             burn_in_debug_info(in_frame, state, in_fps)
             masked_input = cv2.bitwise_and(in_frame, in_frame, mask=motion_mask)
 
-            cv2.imshow("Input", shrink_image_half(in_frame))
-            cv2.imshow("Mask", shrink_image_half(motion_mask))
-            cv2.imshow("Motion Mask", shrink_image_half(masked_input))
+            cv2.imshow(f"{base_filename} Input", shrink_image_half(in_frame))
+            cv2.imshow(f"{base_filename} Mask", shrink_image_half(motion_mask))
+            cv2.imshow(f"{base_filename} Motion Mask", shrink_image_half(masked_input))
 
             cv2.waitKey(1)
 
