@@ -1,3 +1,4 @@
+#!python3
 # gen-unique-video from video with lots of changeless frames
 # My use case - I want to look at my ring videos, but skip the parts where nothing changes.
 # When ring creates a motion video, it starts 30s before motion, and often ends with 30s
@@ -24,8 +25,7 @@
 # E.g. 10s motion -> 2s no_motion -> 10s motion, should assume motion in between
 
 
-from cv_helper import *
-from imutils.video import FPS
+import cv_helper
 from icecream import ic
 import cv2
 import numpy as np
@@ -130,6 +130,7 @@ def to_motion_mask(frame):
     motion_mask = to_contours(motion_mask)
     return motion_mask
 
+
 def create_analyze_debug_frame(frame, motion_mask):
     masked_input = cv2.bitwise_and(frame, frame, mask=motion_mask)
     mask_3c = cv2.cvtColor(motion_mask, cv2.COLOR_GRAY2BGR)
@@ -167,7 +168,6 @@ def to_motion_mask_fast(state: FrameState, frame):
     return state.last_fg_mask
 
 
-
 def shrink_image_half(src):
     if not isinstance(src, np.ndarray):
         return src
@@ -181,7 +181,7 @@ def shrink_image_half(src):
 
 
 def burn_in_debug_info(frame, idx, in_fps):
-    cv2.rectangle(frame, (0,0), (650,70), color_black, fill_rectangle_thickness)
+    cv2.rectangle(frame, (0, 0), (650, 70), color_black, fill_rectangle_thickness)
     cv2.putText(
         frame,
         f"{int(idx/in_fps)}:{idx}",
@@ -204,74 +204,65 @@ def is_frame_black(frame):
     return count_non_zero < non_zero_pixels_in_black_image
 
 
-def process_video(base_filename: str, input_video):
+class remove_background:
+    def __init__(self, base_filename, in_fps=30):
+        self.base_filename = base_filename
+        self.in_fps = in_fps
+        self.debug_window_refresh_rate = int(
+            self.in_fps/2
+        )  # every 0.5 seconds; TODO Compute
+        pass
 
-    state = FrameState(0, 0)
+    def create(self, input_video):
+        self.video = input_video
+        self.state = FrameState(0, 0)
+        self.unique_filename = f"{self.base_filename}_unique.mp4"
+        self.output_unique = cv_helper.LazyVideoWriter(self.unique_filename, self.in_fps)
+        self.mask_filename = f"{self.base_filename}_mask.mp4"
+        self.output_unique_mask = cv_helper.LazyVideoWriter(
+            self.mask_filename, self.in_fps
+        )
+        self.output_video_files = [self.output_unique, self.output_unique_mask]
 
-    width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
-    height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
-    in_fps = input_video.get(cv2.CAP_PROP_FPS)  # float `height`
-    frame_count = int(input_video.get(cv2.CAP_PROP_FRAME_COUNT))
-    ic(width, height, in_fps, frame_count)
+    def destroy(self):
+        cv2.destroyAllWindows()
+        for f in self.output_video_files:
+            f.release()
 
-    unique_filename = f"{base_filename}_unique.mp4"
-    output_unique = LazyVideoWriter(unique_filename, in_fps)
-    mask_filename = f"{base_filename}_mask.mp4"
-    output_unique_mask = LazyVideoWriter(mask_filename, in_fps)
-    output_video_files = [output_unique, output_unique_mask]
-    debug_window_refresh_rate = 10
+    def frame(self, idx, original_frame):
+        self.state.idx = idx
 
-    # start the FPS timer
-    fps = FPS().start()
-    with typer.progressbar(length=frame_count, label="Processing Video") as progress:
-        for (idx, original_frame) in enumerate(video_reader(input_video)):
+        # PERF: Processing at 1/4 size boosts FPS by TK%
+        in_frame = shrink_image_half(original_frame)
 
-            # Update UX counters
-            fps.update()
-            progress.update(1)
-            state.idx = idx
+        # PERF: Motion Mask sampled frames
+        motion_mask = to_motion_mask_fast(self.state, in_frame)
 
-            # PERF: Processing at 1/4 size boosts FPS by TK%
-            in_frame = shrink_image_half(original_frame)
+        # skip frames with no motion
+        if is_frame_black(motion_mask):
+            return
 
+        # PERF - show_debug_window at on sampled frames
+        if idx % self.debug_window_refresh_rate == 0:
+            debug_frame = create_analyze_debug_frame(in_frame, motion_mask)
+            burn_in_debug_info(debug_frame, idx, self.in_fps)
+            # cv2.imshow(f"{self.base_filename} Input", shrink_image_half(debug_frame))
+            # cv2.waitKey(1)
 
-            # PERF: Motion Mask sampled frames
-            motion_mask = to_motion_mask_fast(state, in_frame)
-
-            # skip frames with no motion
-            if is_frame_black(motion_mask):
-                continue
-
-            # PERF - show_debug_window at on sampled frames
-            if idx % debug_window_refresh_rate == 0:
-                debug_frame = create_analyze_debug_frame(in_frame, motion_mask)
-                burn_in_debug_info(debug_frame, idx, in_fps)
-                cv2.imshow(f"{base_filename} Input", shrink_image_half(debug_frame))
-                cv2.waitKey(1)
-
-            output_unique.write(original_frame)
-
-            # masked_input = cv2.bitwise_and(in_frame, in_frame, mask=motion_mask)
-            # output_unique_mask.write(masked_input)
-
-    # stop the timer and display FPS information
-    fps.stop()
-    ic(int(fps.fps()), int(fps.elapsed()))
-
-    cv2.destroyAllWindows()
-    for f in output_video_files:
-        f.release()
+        self.output_unique.write(original_frame)
+        masked_input = cv2.bitwise_and(in_frame, in_frame, mask=motion_mask)
+        self.output_unique_mask.write(masked_input)
 
 
 @app.command()
 def RemoveBackground(
-    video_input_file: str = typer.Argument("in.mp4"), force:bool=typer.Option(False)
+    video_input_file: str = typer.Argument("in.mp4"), force: bool = typer.Option(False)
 ) -> None:
     """
     Remove background from Ring Video
     """
+    ic(f"Removing Video Background {video_input_file}")
     base_filename = video_input_file.split(".")[0]
-    # if file exists, skip it.
     unique_filename = f"{base_filename}_unique.mp4"
 
     if not force and os.path.exists(unique_filename):
@@ -280,9 +271,12 @@ def RemoveBackground(
 
     input_video = cv2.VideoCapture(video_input_file)
     if not input_video.isOpened():
-        return f"Unable to Open {video_input_file} "
+        print(f"Unable to Open {video_input_file}")
+        return
 
-    return process_video(base_filename, input_video)
+    ic(f"Processing File {video_input_file}")
+    rb = remove_background(base_filename,30)
+    return cv_helper.process_video(input_video, rb)
 
 
 if __name__ == "__main__":
