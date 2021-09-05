@@ -3,6 +3,15 @@ from contextlib import contextmanager
 from imutils.video import FPS
 from icecream import ic
 import typer
+import os
+
+
+def cv2_video(path):
+    input_video = cv2.VideoCapture(os.path.expanduser(path))
+    if not input_video.isOpened():
+        print(f"Unable to Open {path}")
+        raise (f"Unable to Open {path}")
+    return input_video
 
 
 # Make a context manager (since it's familiar)
@@ -75,9 +84,10 @@ class LazyVideoWriter:
         if self.vw:
             self.vw.release()
 
+
+# TODO: Would be cool if detected in what system you are (cli,cli/w/term,jupyter)
 def display_jupyter(frame):
     from IPython.display import display, Image, clear_output
     _, jpg = cv2.imencode(".jpeg", frame)
     clear_output(True)
     display(Image(data=jpg.tobytes()))
-

@@ -14,18 +14,17 @@
 
 # + tags=[]
 # Open CV
+# -
 
-# +
 from matplotlib import pyplot as plt
 import cv2
 from IPython.display import display, Image, clear_output
 import os
 import cv_helper
+from filter_to_motion import *
+import pixellib
+from pixellib.semantic import semantic_segmentation
 
-filter - to - motion
-
-
-# -
 
 class remove_background:
     def __init__(self, base_filename, in_fps=30):
@@ -63,18 +62,47 @@ class remove_background:
             cv_helper.display_jupyter(masked_input)
 
 
-# +
-input_video_path = os.path.expanduser("~/downloads/igor-magic.mp4")
-input_video = cv2.VideoCapture(input_video_path)
-if not input_video.isOpened():
-    print(f"Unable to Open {input_video_path}")
-    1 / 0
+input_video_path = "~/downloads/igor-magic.mp4"
+ic(input_video_path)
 
-ic(f"Processing File {input_video_path}")
 rb = remove_background(input_video_path, 30)
-cv_helper.process_video(input_video, rb)
-# -
+cv_helper.process_video(cv_helper.cv2_video(input_video_path), rb)
+
+segment_frame = semantic_segmentation()
+segment_frame.load_ade20k_model(
+    os.path.expanduser("~/downloads/deeplabv3_xception65_ade20k.h5")
+)
 
 
+class segment:
+    def __init__(self, segmenter, in_fps=30):
+        self.segmenter = segmenter  # expensive to initate, cache it.
+        self.in_fps = in_fps
+        self.debug_window_refresh_rate = int(
+            self.in_fps / 2
+        )  # every 0.5 seconds; TODO Compute
+        pass
+
+    def create(self, input_video):
+        pass
+
+    def destroy(self):
+        pass
+
+    def frame(self, idx, frame):
+        if idx % self.in_fps * 5:
+            ret, img = self.segmenter.segmentFrameAsAde20k(frame, overlay=True)
+            cv_helper.display_jupyter(img)
+            ic(ret.keys())
+            ic(ret["class_ids"])
+            ic(len(ret["masks"]))
+            ic(len(ret["masks"][0]))
+            ic(len(ret["masks"][1]))
+            ic(len(ret["masks"][2]))
+            ic(ret["masks"][14])
+
+
+rb = segment(segment_frame, 30)
+cv_helper.process_video(cv_helper.cv2_video(input_video_path), rb)
 
 
