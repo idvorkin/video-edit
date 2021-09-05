@@ -74,3 +74,10 @@ class LazyVideoWriter:
     def release(self):
         if self.vw:
             self.vw.release()
+
+def display_jupyter(frame):
+    from IPython.display import display, Image, clear_output
+    _, jpg = cv2.imencode(".jpeg", frame)
+    clear_output(True)
+    display(Image(data=jpg.tobytes()))
+
