@@ -17,7 +17,7 @@ def cv2_video(path):
 # Make a context manager (since it's familiar)
 # interface create(input_video),release(), frame(i,frame)
 @contextmanager
-def process_video_frames(frame_processor, input_video):
+def process_video_frames_context_manager(frame_processor, input_video):
     frame_processor.create(input_video)
     try:
         yield frame_processor
@@ -36,7 +36,7 @@ def process_video(input_video, frame_processor):
     fps = FPS().start()
     with typer.progressbar(
         length=frame_count, label="Processing Video"
-    ) as progress, process_video_frames(frame_processor, input_video) as process_frame:
+    ) as progress, process_video_frames_context_manager(frame_processor, input_video) as process_frame:
         for (i, frame) in enumerate(video_reader(input_video)):
 
             # Update UX counters

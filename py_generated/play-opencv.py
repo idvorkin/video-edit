@@ -118,7 +118,7 @@ class segment:
 # ## Using YoLo v5
 
 # +
-from utils.plots import Annotator, colors
+from yolo.utils.plots import Annotator, colors
 
 
 class YoloDetector:
@@ -175,12 +175,22 @@ results.save()
 
 ic(results.tolist())
 
-import utils.plot
+import torchvision.utils
 
-utils.plots
+dir(torchvision.utils)
 
 import utils.plots
 
-utils.plots.Annotator
+import torch.utils
+
+# +
+
+dir(torch.utils)
+# -
+
+import torchvision
+
+dir(torchvision.utils)
+
 
 
