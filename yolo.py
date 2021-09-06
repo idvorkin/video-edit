@@ -18,7 +18,7 @@ app = typer.Typer()
 
 
 class YoloProcessor:
-    def __init__(self, base_filename, in_fps=30):
+    def __init__(self, base_filename):
         self.base_filename = base_filename
         self.in_fps = in_fps
         self.debug_window_refresh_rate = int(
@@ -28,6 +28,7 @@ class YoloProcessor:
 
     def create(self, input_video):
         self.video = input_video
+        self.video_fps = input_video.get(cv2.CAP_PROP_FPS)
         self.yolo = torch.hub.load(
             "ultralytics/yolov5", "yolov5s"
         )  # or yolov5m, yolov5l, yolov5x, custom

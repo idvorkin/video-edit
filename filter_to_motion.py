@@ -71,8 +71,8 @@ def to_black_and_white(frame):
     color_threshold = 127
     convert_to_color = color_white
 
-    ## QQ: Is this doing anything if I've already bg subtracted - not so sure!
-    ## I guess I can histogram to find out?
+    # QQ: Is this doing anything if I've already bg subtracted - not so sure!
+    # I guess I can histogram to find out?
     ret, threshed = cv2.threshold(
         frame,
         color_threshold,
@@ -205,17 +205,17 @@ def is_frame_black(frame):
 
 
 class remove_background:
-    def __init__(self, base_filename, in_fps=30):
+    def __init__(self, base_filename):
         self.base_filename = base_filename
-        self.in_fps = in_fps
-        self.debug_window_refresh_rate = int(
-            self.in_fps/2
-        )  # every 0.5 seconds; TODO Compute
         pass
 
     def create(self, input_video):
         self.video = input_video
         self.state = FrameState(0, 0)
+        self.in_fps = input_video.get(cv2.CAP_PROP_FPS)
+        self.debug_window_refresh_rate = int(
+            self.in_fps/2
+        )  # every 0.5 seconds; TODO Compute
         self.unique_filename = f"{self.base_filename}_unique.mp4"
         self.output_unique = cv_helper.LazyVideoWriter(self.unique_filename, self.in_fps)
         self.mask_filename = f"{self.base_filename}_mask.mp4"
@@ -275,7 +275,7 @@ def RemoveBackground(
         return
 
     ic(f"Processing File {video_input_file}")
-    rb = remove_background(base_filename,30)
+    rb = remove_background(base_filename)
     return cv_helper.process_video(input_video, rb)
 
 
