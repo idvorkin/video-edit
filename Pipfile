@@ -54,6 +54,8 @@ imutils = "*"
 tensorflow ="*"
 imgaug="*"
 pixellib="*"
+torch="*"
+torchvision = "*"
 
 [dev-packages]
 # For VS Code editor

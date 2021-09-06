@@ -14,17 +14,23 @@
 
 # + tags=[]
 # Open CV
-# -
 
+# +
 from matplotlib import pyplot as plt
 import cv2
 from IPython.display import display, Image, clear_output
 import os
 import cv_helper
 from filter_to_motion import *
-import pixellib
-from pixellib.semantic import semantic_segmentation
 
+# import pixellib
+# from pixellib.semantic import semantic_segmentation
+import torch
+import torchvision
+from PIL import Image
+
+
+# -
 
 class remove_background:
     def __init__(self, base_filename, in_fps=30):
@@ -68,11 +74,13 @@ ic(input_video_path)
 rb = remove_background(input_video_path, 30)
 cv_helper.process_video(cv_helper.cv2_video(input_video_path), rb)
 
-segment_frame = semantic_segmentation()
-segment_frame.load_ade20k_model(
-    os.path.expanduser("~/downloads/deeplabv3_xception65_ade20k.h5")
-)
 
+# # Pixel Lab - not great, a random incohrent set of APIs, but setup for nice demos
+
+# +
+# segment_frame = semantic_segmentation()
+# segment_frame.load_ade20k_model(os.path.expanduser("~/downloads/deeplabv3_xception65_ade20k.h5"))
+# -
 
 class segment:
     def __init__(self, segmenter, in_fps=30):
@@ -102,7 +110,77 @@ class segment:
             ic(ret["masks"][14])
 
 
-rb = segment(segment_frame, 30)
-cv_helper.process_video(cv_helper.cv2_video(input_video_path), rb)
+# +
+# sf = segment(segment_frame,30)
+# cv_helper.process_video(cv_helper.cv2_video(input_video_path), sf)
+# -
+
+# ## Using YoLo v5
+
+# +
+from utils.plots import Annotator, colors
+
+
+class YoloDetector:
+    def __init__(self, in_fps=30):
+        self.yolo = torch.hub.load(
+            "ultralytics/yolov5", "yolov5s"
+        )  # or yolov5m, yolov5l, yolov5x, custom
+        self.in_fps = in_fps
+
+    def create(self, input_video):
+        pass
+
+    def destroy(self):
+        pass
+
+    def frame(self, idx, frame):
+        # pretty expensive, only do every 10 seconds
+        if idx % (self.in_fps * 1) != 0:
+            return
+
+        # Inference
+        results = self.yolo(frame)
+        predictions = results.pred[0]
+
+        # PyTorch uses PIL Format
+        # I wonder if I can skip some of these switches
+        # You may need to convert the color.
+        img_pil = np.ascontiguousarray(
+            Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        )
+
+        annotator = Annotator((img_pil))
+        for *box, confidence, cls in predictions:
+            # ic(cls, confidence, results.names[int(cls)])
+            label = f"{results.names[int(cls)]} {confidence:.2f}"
+            annotator.box_label(box, label, color=colors(cls))
+
+        # For reversing the operation:
+        im_np = np.asarray(annotator.im)
+        cv_helper.display_jupyter(im_np)
+
+
+# -
+
+# Images
+# img = os.path.expanduser('~/downloads/amelia-face.jpg')
+yolo = YoloDetector()
+cv_helper.process_video(cv_helper.cv2_video(input_video_path), yolo)
+
+
+results.save()
+
+
+
+ic(results.tolist())
+
+import utils.plot
+
+utils.plots
+
+import utils.plots
+
+utils.plots.Annotator
 
 
