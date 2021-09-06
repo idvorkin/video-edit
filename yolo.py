@@ -30,6 +30,8 @@ class YoloProcessor:
             self.yolo_filename, self.fps
         )
         self.output_video_files = [self.yolo_writer]
+        self.results = None # cache this from previous runs
+        self.update_freq = int(self.fps/2) # every 0.5 seconds update bounding box
 
     def destroy(self):
         cv2.destroyAllWindows()
@@ -37,8 +39,14 @@ class YoloProcessor:
             f.release()
 
     def frame(self, idx, frame):
-        results = self.yolo(frame)
-        predictions = results.pred[0]
+
+        # results don't move so frequently that we need to re-yolo
+        # on each frame, so just do every 500ms
+
+        if idx%self.update_freq == 0:
+            self.results = self.yolo(frame)
+
+        predictions = self.results.pred[0]
 
         is_jupyter = False
         if is_jupyter:
@@ -50,7 +58,7 @@ class YoloProcessor:
         frame_PIL = cv_helper.open_cv_to_PIL(frame)
         annotator = Annotator((frame_PIL))
         for *box, confidence, cls in predictions:
-            label = f"{results.names[int(cls)]} {confidence:.2f}"
+            label = f"{self.results.names[int(cls)]} {confidence:.2f}"
             annotator.box_label(box, label, color=colors(cls))
 
         # PIL to opencv
