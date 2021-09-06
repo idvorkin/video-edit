@@ -4,13 +4,17 @@ from imutils.video import FPS
 from icecream import ic
 import os
 import typer
+import numpy as np
+from PIL import Image
+from typing import Protocol
+
 
 
 def cv2_video(path):
     input_video = cv2.VideoCapture(os.path.expanduser(path))
     if not input_video.isOpened():
         print(f"Unable to Open {path}")
-        raise (f"Unable to Open {path}")
+        raise Exception(f"Unable to Open {path}")
     return input_video
 
 
@@ -24,8 +28,17 @@ def process_video_frames_context_manager(frame_processor, input_video):
     finally:
         frame_processor.destroy()
 
+class FrameProcessor(Protocol):
+    def create(self, input_video) -> None:
+        pass
+    def destroy(self) -> None:
+        pass
+    def frame(self, idx:int, frame) -> None:
+        pass
 
-def process_video(input_video, frame_processor):
+
+
+def process_video(input_video, frame_processor:FrameProcessor):
     width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
     height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
     video_fps = input_video.get(cv2.CAP_PROP_FPS)
@@ -84,6 +97,18 @@ class LazyVideoWriter:
     def release(self):
         if self.vw:
             self.vw.release()
+
+def PIL_to_open_cv(pil_img):
+    as_cv = np.asarray(pil_img) # I nee to change color spaces
+    cv_fix_color = cv2.cvtColor(as_cv, cv2.COLOR_RGB2BGR)
+    return cv_fix_color
+
+
+def open_cv_to_PIL(frame):
+    img_pil = np.ascontiguousarray(
+        Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    )
+    return img_pil
 
 
 # TODO: Would be cool if detected in what system you are (cli,cli/w/term,jupyter)

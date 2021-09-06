@@ -4,13 +4,10 @@
 
 import torch
 from plots import Annotator, colors
-from PIL import Image
 
 import cv_helper
 from icecream import ic
 import cv2
-import numpy as np
-from dataclasses import dataclass
 import typer
 import os.path
 
@@ -20,27 +17,19 @@ app = typer.Typer()
 class YoloProcessor:
     def __init__(self, base_filename):
         self.base_filename = base_filename
-        self.in_fps = in_fps
-        self.debug_window_refresh_rate = int(
-            self.in_fps / 2
-        )  # every 0.5 seconds; TODO Compute
         pass
 
     def create(self, input_video):
         self.video = input_video
-        self.video_fps = input_video.get(cv2.CAP_PROP_FPS)
+        self.fps = input_video.get(cv2.CAP_PROP_FPS)
         self.yolo = torch.hub.load(
             "ultralytics/yolov5", "yolov5s"
         )  # or yolov5m, yolov5l, yolov5x, custom
-        self.unique_filename = f"{self.base_filename}_unique.mp4"
-        self.output_unique = cv_helper.LazyVideoWriter(
-            self.unique_filename, self.in_fps
+        self.yolo_filename = f"{self.base_filename}_yolo.mp4"
+        self.yolo_writer = cv_helper.LazyVideoWriter(
+            self.yolo_filename, self.fps
         )
-        self.mask_filename = f"{self.base_filename}_mask.mp4"
-        self.output_unique_mask = cv_helper.LazyVideoWriter(
-            self.mask_filename, self.in_fps
-        )
-        self.output_video_files = [self.output_unique, self.output_unique_mask]
+        self.output_video_files = [self.yolo_writer]
 
     def destroy(self):
         cv2.destroyAllWindows()
@@ -51,25 +40,21 @@ class YoloProcessor:
         results = self.yolo(frame)
         predictions = results.pred[0]
 
-        # PyTorch uses PIL Format
-        # I wonder if I can skip some of these switches
-        # You may need to convert the color.
-        img_pil = np.ascontiguousarray(
-            Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        )
-        if idx % self.in_fps  == 0:
-            ic(idx)
+        is_jupyter = False
+        if is_jupyter:
+            # output on jupyter every second
+            if idx % self.fps == 0:
+                ic(idx)
 
-        annotator = Annotator((img_pil))
+        # pytorch needs to be in PIL format
+        frame_PIL = cv_helper.open_cv_to_PIL(frame)
+        annotator = Annotator((frame_PIL))
         for *box, confidence, cls in predictions:
-            # ic(cls, confidence, results.names[int(cls)])
             label = f"{results.names[int(cls)]} {confidence:.2f}"
             annotator.box_label(box, label, color=colors(cls))
 
-        # For reversing the operation:
-        im_np = np.asarray(annotator.im)
-        self.output_unique.write(im_np)
-        self.output_unique_mask.write(im_np)
+        # PIL to opencv
+        self.yolo_writer.write(cv_helper.PIL_to_open_cv(annotator.im))
 
 
 @app.command()
@@ -93,8 +78,9 @@ def Yolo(
         return
 
     ic(f"Processing File {video_input_file}, w/{base_filename}")
-    yolo = YoloProcessor(base_filename, 30)
-    return cv_helper.process_video(input_video,yolo)
+    yolo = YoloProcessor(base_filename)
+    return cv_helper.process_video(input_video, yolo)
+
 
 if __name__ == "__main__":
     app()
