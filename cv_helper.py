@@ -2,8 +2,8 @@ import cv2
 from contextlib import contextmanager
 from imutils.video import FPS
 from icecream import ic
-import typer
 import os
+import typer
 
 
 def cv2_video(path):
@@ -28,24 +28,25 @@ def process_video_frames_context_manager(frame_processor, input_video):
 def process_video(input_video, frame_processor):
     width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
     height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
-    in_fps = input_video.get(cv2.CAP_PROP_FPS)  # float `height`
+    video_fps = input_video.get(cv2.CAP_PROP_FPS)
     frame_count = int(input_video.get(cv2.CAP_PROP_FRAME_COUNT))
-    ic(width, height, in_fps, frame_count)
+    ic(width, height, video_fps, frame_count)
 
     # start the FPS timer
     fps = FPS().start()
     with typer.progressbar(
         length=frame_count, label="Processing Video"
-    ) as progress, process_video_frames_context_manager(frame_processor, input_video) as process_frame:
+    ) as progress_bar, process_video_frames_context_manager(frame_processor, input_video) as process_frame:
         for (i, frame) in enumerate(video_reader(input_video)):
 
             # Update UX counters
             fps.update()
             process_frame.frame(i, frame)
+            progress_bar.update(1)
 
     # stop the timer and display FPS information
     fps.stop()
-    ic(int(fps.fps()), int(fps.elapsed()))
+    ic(int(fps.fps()),"Elapsed Seconds", int(fps.elapsed()))
 
 
 def video_reader(input_video):
