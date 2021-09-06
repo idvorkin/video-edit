@@ -15,9 +15,13 @@ app = typer.Typer()
 
 
 class YoloProcessor:
-    def __init__(self, base_filename):
+    def __init__(self, base_filename, update_fps_ratio=0, people_only=False, trim_no_people=False):
         self.base_filename = base_filename
-        pass
+        self.update_fps_ratio = update_fps_ratio
+        self.people_only = people_only
+        self.last_person_frame = 0
+        self.seconds_to_lag_people_motion = 5
+        self.trim_no_people = trim_no_people
 
     def create(self, input_video):
         self.video = input_video
@@ -26,12 +30,12 @@ class YoloProcessor:
             "ultralytics/yolov5", "yolov5s"
         )  # or yolov5m, yolov5l, yolov5x, custom
         self.yolo_filename = f"{self.base_filename}_yolo.mp4"
-        self.yolo_writer = cv_helper.LazyVideoWriter(
-            self.yolo_filename, self.fps
-        )
+        self.yolo_writer = cv_helper.LazyVideoWriter(self.yolo_filename, self.fps)
         self.output_video_files = [self.yolo_writer]
-        self.results = None # cache this from previous runs
-        self.update_freq = int(self.fps/2) # every 0.5 seconds update bounding box
+        self.results = None  # cache this from previous runs
+        self.update_freq = 1  # default update_frequency is every frame
+        if self.update_fps_ratio > 0:
+            self.update_freq = int(self.fps * self.update_fps_ratio)
 
     def destroy(self):
         cv2.destroyAllWindows()
@@ -43,7 +47,7 @@ class YoloProcessor:
         # results don't move so frequently that we need to re-yolo
         # on each frame, so just do every 500ms
 
-        if idx%self.update_freq == 0:
+        if idx % self.update_freq == 0:
             self.results = self.yolo(frame)
 
         predictions = self.results.pred[0]
@@ -58,16 +62,37 @@ class YoloProcessor:
         frame_PIL = cv_helper.open_cv_to_PIL(frame)
         annotator = Annotator((frame_PIL))
         for *box, confidence, cls in predictions:
+            if self.results.names[int(cls)] == "person":
+                self.last_person_frame = idx
+
+            if self.people_only:
+                if self.results.names[int(cls)] != "person":
+                    continue
+
             label = f"{self.results.names[int(cls)]} {confidence:.2f}"
             annotator.box_label(box, label, color=colors(cls))
+        write_frame = True
 
-        # PIL to opencv
-        self.yolo_writer.write(cv_helper.PIL_to_open_cv(annotator.im))
+        if self.trim_no_people:
+            no_people_motion_for_threshold = idx > self.last_person_frame  + self.fps*self.seconds_to_lag_people_motion
+            if no_people_motion_for_threshold:
+                write_frame = False
+
+        if write_frame:
+            self.yolo_writer.write(cv_helper.PIL_to_open_cv(annotator.im))
+
+
+
+
 
 
 @app.command()
 def Yolo(
-    video_input_file: str = typer.Argument("in.mp4"), force: bool = typer.Option(False)
+    video_input_file: str = typer.Argument("in.mp4"),
+    force: bool = typer.Option(False),
+    fps_ratio: float = typer.Option(0.5),
+    people_only: bool = typer.Option(True),
+    trim_no_people: bool = typer.Option(False)
 ) -> None:
     """
     Remove background from Ring Video
@@ -86,7 +111,10 @@ def Yolo(
         return
 
     ic(f"Processing File {video_input_file}, w/{base_filename}")
-    yolo = YoloProcessor(base_filename)
+    yolo = YoloProcessor(
+        base_filename, people_only=people_only, update_fps_ratio=fps_ratio,
+        trim_no_people = trim_no_people
+    )
     return cv_helper.process_video(input_video, yolo)
 
 
