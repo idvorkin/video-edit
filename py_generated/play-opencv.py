@@ -75,7 +75,7 @@ rb = remove_background(input_video_path, 30)
 cv_helper.process_video(cv_helper.cv2_video(input_video_path), rb)
 
 
-# # Pixel Lab - not great, a random incohrent set of APIs, but setup for nice demos
+# ## Pixel Lab - not great, very slow, and in-consistent set of APIs.
 
 # +
 # segment_frame = semantic_segmentation()
@@ -115,10 +115,10 @@ class segment:
 # cv_helper.process_video(cv_helper.cv2_video(input_video_path), sf)
 # -
 
-# ## Using YoLo v5
+# ## YoLo v5, Looks awesome!  And it's based on PyTorch, which is kind of nice
 
 # +
-from yolo.utils.plots import Annotator, colors
+from plots import Annotator, colors
 
 
 class YoloDetector:
@@ -167,30 +167,6 @@ class YoloDetector:
 # img = os.path.expanduser('~/downloads/amelia-face.jpg')
 yolo = YoloDetector()
 cv_helper.process_video(cv_helper.cv2_video(input_video_path), yolo)
-
-
-results.save()
-
-
-
-ic(results.tolist())
-
-import torchvision.utils
-
-dir(torchvision.utils)
-
-import utils.plots
-
-import torch.utils
-
-# +
-
-dir(torch.utils)
-# -
-
-import torchvision
-
-dir(torchvision.utils)
 
 
 
