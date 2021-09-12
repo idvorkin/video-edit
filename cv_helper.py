@@ -6,8 +6,7 @@ import os
 import typer
 import numpy as np
 from PIL import Image
-from typing import Protocol
-
+from typing_extensions import Protocol
 
 
 def cv2_video(path):
