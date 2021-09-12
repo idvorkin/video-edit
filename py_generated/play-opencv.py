@@ -14,6 +14,18 @@
 
 # + tags=[]
 # Open CV
+# -
+
+# Set to False if we're not on a local machine
+local = True
+if not local:
+    print("Not on local machine, installing")
+    # !git clone https://github.com/idvorkin/video-edit/ ~/gits/video-edit
+    # !wget -nc https://files6678.blob.core.windows.net/videos/igor-magic.mp4 ~/downloads
+    # !pip3 install icecream typer
+    # %cd ~/gits/video-edit
+
+
 
 # +
 from matplotlib import pyplot as plt
@@ -161,12 +173,13 @@ class YoloDetector:
         cv_helper.display_jupyter(im_np)
 
 
-# -
-
+# +
 # Images
 # img = os.path.expanduser('~/downloads/amelia-face.jpg')
+
 yolo = YoloDetector()
 cv_helper.process_video(cv_helper.cv2_video(input_video_path), yolo)
+# -
 
 
 

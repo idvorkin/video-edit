@@ -115,7 +115,7 @@ def Yolo(
         base_filename, people_only=people_only, update_fps_ratio=fps_ratio,
         trim_no_people = trim_no_people
     )
-    return cv_helper.process_video(input_video, yolo)
+    return cv_helper.process_video(yolo, input_video)
 
 
 if __name__ == "__main__":
