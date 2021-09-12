@@ -14,16 +14,22 @@
 
 # + tags=[]
 # Open CV
-# -
 
+# +
 # Set to False if we're not on a local machine
 local = True
+if "google.colab" in str(get_ipython()):
+    local = False
+
 if not local:
     print("Not on local machine, installing")
     # !git clone https://github.com/idvorkin/video-edit/ ~/gits/video-edit
-    # !wget -nc https://files6678.blob.core.windows.net/videos/igor-magic.mp4 ~/downloads
+    # %mkir ~/downloads
+    # %cd ~/downloads
+    # !wget -nc https://files6678.blob.core.windows.net/videos/igor-magic.mp4
     # !pip3 install icecream typer
     # %cd ~/gits/video-edit
+# -
 
 
 
@@ -80,7 +86,7 @@ class remove_background:
             cv_helper.display_jupyter(masked_input)
 
 
-input_video_path = "~/downloads/igor-magic.mp4"
+input_video_path = os.path.expanduser("~/downloads/igor-magic.mp4")
 ic(input_video_path)
 
 rb = remove_background(input_video_path, 30)
@@ -134,16 +140,19 @@ from plots import Annotator, colors
 
 
 class YoloDetector:
-    def __init__(self, in_fps=30):
-        self.yolo = torch.hub.load(
-            "ultralytics/yolov5", "yolov5s"
-        )  # or yolov5m, yolov5l, yolov5x, custom
-        self.in_fps = in_fps
+    # yolo is a class variable to avoid spurious reloads
+    yolo = torch.hub.load(
+        "ultralytics/yolov5", "yolov5s"
+    )  # or yolov5m, yolov5l, yolov5x, custom
+
+    def __init__(self):
+        self.in_fps = input_video.get(cv2.CAP_PROP_FPS)
 
     def create(self, input_video):
         pass
 
     def destroy(self):
+        ic(self.in_fps)
         pass
 
     def frame(self, idx, frame):
@@ -178,7 +187,8 @@ class YoloDetector:
 # img = os.path.expanduser('~/downloads/amelia-face.jpg')
 
 yolo = YoloDetector()
-cv_helper.process_video(cv_helper.cv2_video(input_video_path), yolo)
+input_video = cv2.VideoCapture(input_video_path)
+cv_helper.process_video(input_video, yolo)
 # -
 
 
