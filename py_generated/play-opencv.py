@@ -18,8 +18,12 @@
 # +
 # Set to False if we're not on a local machine
 local = True
-if "google.colab" in str(get_ipython()):
+is_on_goolge_collab = "google.colab" in str(get_ipython())
+if is_on_goolge_collab:
     local = False
+    device_name = tf.test.gpu_device_name()
+    ic(device_name)
+
 
 if not local:
     print("Not on local machine, installing")
@@ -146,10 +150,10 @@ class YoloDetector:
     )  # or yolov5m, yolov5l, yolov5x, custom
 
     def __init__(self):
-        self.in_fps = input_video.get(cv2.CAP_PROP_FPS)
+        pass
 
     def create(self, input_video):
-        pass
+        self.in_fps = input_video.get(cv2.CAP_PROP_FPS)
 
     def destroy(self):
         ic(self.in_fps)
