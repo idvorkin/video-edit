@@ -7,7 +7,7 @@ My explorations on video editting and computer vision.
 - Yolo Model - does object detection but pretty slow
 - Hand Rolled Motion Detector via openCV
 
-## Other work
+### Other work
 
 [auto-editor](https://github.com/WyattBlue/auto-editor) - Auto trim w/no motion or audio. Except doesn't quite work
 
