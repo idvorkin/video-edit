@@ -5,18 +5,15 @@
     "prettier": "^2.5.1"
   },
   "lint-staged": {
-    "*.{js,css,md}": "prettier --write"
+    "*.md": [
+      "prettier --write",
+      "markdownlint --fix"
+    ],
+    "*.{py,ipynb}": [
+      "black"
+    ]
   },
   "scripts": {
     "prepare": "husky install"
-  },
-  "lint-staged": {
-      "*.md": [
-          "prettier --write",
-          "markdownlint --fix"
-      ],
-      "*.{py,ipynb}": [
-          "black"
-          ]
   }
 }
