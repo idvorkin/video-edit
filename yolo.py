@@ -15,7 +15,9 @@ app = typer.Typer()
 
 
 class YoloProcessor:
-    def __init__(self, base_filename, update_fps_ratio=0, people_only=False, trim_no_people=False):
+    def __init__(
+        self, base_filename, update_fps_ratio=0, people_only=False, trim_no_people=False
+    ):
         self.base_filename = base_filename
         self.update_fps_ratio = update_fps_ratio
         self.people_only = people_only
@@ -74,16 +76,15 @@ class YoloProcessor:
         write_frame = True
 
         if self.trim_no_people:
-            no_people_motion_for_threshold = idx > self.last_person_frame  + self.fps*self.seconds_to_lag_people_motion
+            no_people_motion_for_threshold = (
+                idx
+                > self.last_person_frame + self.fps * self.seconds_to_lag_people_motion
+            )
             if no_people_motion_for_threshold:
                 write_frame = False
 
         if write_frame:
             self.yolo_writer.write(cv_helper.PIL_to_open_cv(annotator.im))
-
-
-
-
 
 
 @app.command()
@@ -92,7 +93,7 @@ def Yolo(
     force: bool = typer.Option(False),
     fps_ratio: float = typer.Option(0.5),
     people_only: bool = typer.Option(True),
-    trim_no_people: bool = typer.Option(False)
+    trim_no_people: bool = typer.Option(False),
 ) -> None:
     """
     Remove background from Ring Video
@@ -112,8 +113,10 @@ def Yolo(
 
     ic(f"Processing File {video_input_file}, w/{base_filename}")
     yolo = YoloProcessor(
-        base_filename, people_only=people_only, update_fps_ratio=fps_ratio,
-        trim_no_people = trim_no_people
+        base_filename,
+        people_only=people_only,
+        update_fps_ratio=fps_ratio,
+        trim_no_people=trim_no_people,
     )
     return cv_helper.process_video(yolo, input_video)
 

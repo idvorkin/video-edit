@@ -27,17 +27,19 @@ def process_video_frames_context_manager(frame_processor, input_video):
     finally:
         frame_processor.destroy()
 
+
 class FrameProcessor(Protocol):
     def create(self, input_video) -> None:
         pass
+
     def destroy(self) -> None:
         pass
-    def frame(self, idx:int, frame) -> None:
+
+    def frame(self, idx: int, frame) -> None:
         pass
 
 
-
-def process_video(input_video, frame_processor:FrameProcessor):
+def process_video(input_video, frame_processor: FrameProcessor):
     width = input_video.get(cv2.CAP_PROP_FRAME_WIDTH)  # float `width`
     height = input_video.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float `height`
     video_fps = input_video.get(cv2.CAP_PROP_FPS)
@@ -48,7 +50,9 @@ def process_video(input_video, frame_processor:FrameProcessor):
     fps = FPS().start()
     with typer.progressbar(
         length=frame_count, label="Processing Video"
-    ) as progress_bar, process_video_frames_context_manager(frame_processor, input_video) as process_frame:
+    ) as progress_bar, process_video_frames_context_manager(
+        frame_processor, input_video
+    ) as process_frame:
         for (i, frame) in enumerate(video_reader(input_video)):
 
             # Update UX counters
@@ -58,7 +62,7 @@ def process_video(input_video, frame_processor:FrameProcessor):
 
     # stop the timer and display FPS information
     fps.stop()
-    ic(int(fps.fps()),"Elapsed Seconds", int(fps.elapsed()))
+    ic(int(fps.fps()), "Elapsed Seconds", int(fps.elapsed()))
 
 
 def video_reader(input_video):
@@ -97,8 +101,9 @@ class LazyVideoWriter:
         if self.vw:
             self.vw.release()
 
+
 def PIL_to_open_cv(pil_img):
-    as_cv = np.asarray(pil_img) # I nee to change color spaces
+    as_cv = np.asarray(pil_img)  # I nee to change color spaces
     cv_fix_color = cv2.cvtColor(as_cv, cv2.COLOR_RGB2BGR)
     return cv_fix_color
 
@@ -113,6 +118,7 @@ def open_cv_to_PIL(frame):
 # TODO: Would be cool if detected in what system you are (cli,cli/w/term,jupyter)
 def display_jupyter(frame):
     from IPython.display import display, Image, clear_output
+
     _, jpg = cv2.imencode(".jpeg", frame)
     clear_output(True)
     display(Image(data=jpg.tobytes()))

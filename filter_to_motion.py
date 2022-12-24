@@ -214,10 +214,12 @@ class remove_background:
         self.state = FrameState(0, 0)
         self.in_fps = input_video.get(cv2.CAP_PROP_FPS)
         self.debug_window_refresh_rate = int(
-            self.in_fps/2
+            self.in_fps / 2
         )  # every 0.5 seconds; TODO Compute
         self.unique_filename = f"{self.base_filename}_unique.mp4"
-        self.output_unique = cv_helper.LazyVideoWriter(self.unique_filename, self.in_fps)
+        self.output_unique = cv_helper.LazyVideoWriter(
+            self.unique_filename, self.in_fps
+        )
         self.mask_filename = f"{self.base_filename}_mask.mp4"
         self.output_unique_mask = cv_helper.LazyVideoWriter(
             self.mask_filename, self.in_fps
