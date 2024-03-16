@@ -2,7 +2,6 @@
 # gen-unique-video from video with lots of changeless frames
 
 
-from plots import Annotator, colors
 from ultralytics import YOLO
 
 import cv_helper
