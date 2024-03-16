@@ -2,8 +2,8 @@
 # gen-unique-video from video with lots of changeless frames
 
 
-import torch
 from plots import Annotator, colors
+from ultralytics import YOLO
 
 import cv_helper
 from icecream import ic
@@ -28,9 +28,7 @@ class YoloProcessor:
     def create(self, input_video):
         self.video = input_video
         self.fps = input_video.get(cv2.CAP_PROP_FPS)
-        self.yolo = torch.hub.load(
-            "ultralytics/yolov5", "yolov5s"
-        )  # or yolov5m, yolov5l, yolov5x, custom
+        self.yolo = YOLO('yolov8n-seg.pt')  # pretrained YOLOv8n model
         self.yolo_filename = f"{self.base_filename}_yolo.mp4"
         self.yolo_writer = cv_helper.LazyVideoWriter(self.yolo_filename, self.fps)
         self.output_video_files = [self.yolo_writer]
@@ -52,7 +50,7 @@ class YoloProcessor:
         if idx % self.update_freq == 0:
             self.results = self.yolo(frame)
 
-        predictions = self.results.pred[0]
+        predictions = self.results[0].names
 
         is_jupyter = False
         if is_jupyter:
@@ -61,18 +59,6 @@ class YoloProcessor:
                 ic(idx)
 
         # pytorch needs to be in PIL format
-        frame_PIL = cv_helper.open_cv_to_PIL(frame)
-        annotator = Annotator((frame_PIL))
-        for *box, confidence, cls in predictions:
-            if self.results.names[int(cls)] == "person":
-                self.last_person_frame = idx
-
-            if self.people_only:
-                if self.results.names[int(cls)] != "person":
-                    continue
-
-            label = f"{self.results.names[int(cls)]} {confidence:.2f}"
-            annotator.box_label(box, label, color=colors(cls))
         write_frame = True
 
         if self.trim_no_people:
@@ -84,7 +70,7 @@ class YoloProcessor:
                 write_frame = False
 
         if write_frame:
-            self.yolo_writer.write(cv_helper.PIL_to_open_cv(annotator.im))
+            self.yolo_writer.write(cv_helper.PIL_to_open_cv(self.results[0].plot()))
 
 
 @app.command()
