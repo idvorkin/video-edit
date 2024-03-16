@@ -1,4 +1,8 @@
-from  enum  import Enum, auto
+from enum import Enum
+from typing import NamedTuple, Tuple, List
+import math
+import torch
+from icecream import ic
 
 # Mapping from index to body part
 class BodyPart(Enum):
@@ -20,29 +24,88 @@ class BodyPart(Enum):
     LEFT_ANKLE = 15
     RIGHT_ANKLE = 16
 
+
 #  BodyPart are the index map index to body part name as string
 def get_body_part(index):
     return BodyPart(index).name
+
 
 # get only right body parts
 def is_right_body_part(index):
     return index % 2 == 0
 
-#
-class Body():
+
+Bone = NamedTuple("Bone", [("bottom", torch.tensor), ("top", torch.tensor)])
+
+
+class Body:
     # take a [(x,y)],[conf] as input
-    def __init__(self, keypoints, conf):
+    def __init__(self, keypoints: List[[int, int]], conf):
         self.keypoints = keypoints
         self.conf = conf
-    def make_bone(self, bottom:BodyPart, top:BodyPart):
-        # return a line
-        line = (self.keypoints[bottom] , self.keypoints[top])
-        return line
 
-    def spine(self):
+    def make_bone(self, bottom: BodyPart, top: BodyPart) -> Bone:
+        return Bone(self.get_part(bottom), self.get_part(top))
+
+    def get_part(self, part: BodyPart):
+        return self.keypoints[part.value]
+
+    def spine(self) -> Bone:
         return self.make_bone(BodyPart.RIGHT_HIP, BodyPart.RIGHT_EAR)
 
-    def vertical_diff(self, bone):
-        # compute angle between bone and a vertical line
-        return
+    def r_upper_arm(self) -> Bone:
+        return self.make_bone(BodyPart.RIGHT_SHOULDER, BodyPart.RIGHT_ELBOW)
 
+    def r_arm_lower(self) -> Bone:
+        return self.make_bone(BodyPart.RIGHT_ELBOW, BodyPart.RIGHT_WRIST)
+
+    def r_leg_upper(self) -> Bone:
+        return self.make_bone(BodyPart.RIGHT_HIP, BodyPart.RIGHT_KNEE)
+
+    def r_leg_lower(self) -> Bone:
+        return self.make_bone(BodyPart.RIGHT_KNEE, BodyPart.RIGHT_ANKLE)
+
+    def hip_angle(self):
+        return make_angle(self.r_leg_upper(), self.spine())
+
+    def knee_angle(self):
+        return make_angle(self.r_leg_upper(), self.r_leg_lower())
+
+    def armpit_angle(self):
+        return make_angle(self.spine(), self.r_leg_upper())
+
+    def spine_vertical(self):
+        return bone_to_vertical(self.spine())
+
+
+def make_angle(bone1: Bone, bone2: Bone) -> float:
+
+    hold_bone = bone1
+
+    if torch.equal(bone1.top, bone2.top):
+        # if passed in wrong ends swap them
+        hold_bone = Bone(bone2.top, bone2.bottom)
+    else:
+        assert torch.equal(
+            bone1.bottom, hold_bone.bottom
+        ), "Both bones should have same bottom"
+
+    x1, y1 = bone1.bottom
+    x2, y2 = bone1.top
+    x3, y3 = hold_bone.top
+    # I need to add both angles
+    angle_1 = math.atan2(y2 - y1, x2 - x1)
+    angle2 = math.atan2(y3 - y2, x3 - x2)
+    return int(math.degrees(angle_1 + angle2))
+
+
+def bone_to_horizontal(bone1: Bone):
+    x1, y1 = bone1.bottom
+    x2, y2 = bone1.top
+    return abs(int(math.degrees(math.atan2(y2 - y1, x2 - x1))))
+
+
+def bone_to_vertical(bone1: Bone):
+    x1, y1 = bone1.bottom
+    x2, y2 = bone1.top
+    return abs(int(math.degrees(math.atan2(x2 - x1, y2 - y1))))

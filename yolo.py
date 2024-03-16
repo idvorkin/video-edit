@@ -9,7 +9,7 @@ from icecream import ic
 import cv2
 import typer
 import os.path
-from pose_helper import BodyPart, get_body_part, is_right_body_part
+from pose_helper import BodyPart, get_body_part, is_right_body_part, Body
 
 app = typer.Typer()
 
@@ -29,7 +29,7 @@ class YoloProcessor:
         self.video = input_video
         self.fps = input_video.get(cv2.CAP_PROP_FPS)
         # self.yolo = YOLO('yolov8n-seg.pt')  # pretrained YOLOv8n model
-        self.yolo = YOLO('yolov8n-pose.pt')  # pretrained YOLOv8n model
+        self.yolo = YOLO("yolov8n-pose.pt")  # pretrained YOLOv8n model
         self.yolo_filename = f"{self.base_filename}_yolo.mp4"
         self.yolo_writer = cv_helper.LazyVideoWriter(self.yolo_filename, self.fps)
         self.output_video_files = [self.yolo_writer]
@@ -45,7 +45,6 @@ class YoloProcessor:
 
     def add_pose(self, im):
         # self
-        im = cv2.putText(im, "Hello, World!", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
         # get highest confidence person
 
         kp = self.results[0].keypoints
@@ -54,18 +53,40 @@ class YoloProcessor:
         confidence = kp.conf[0]
         # ic(keypoints, confidence)
         nothing = True
-        font_scale = 0.5 # should be dynamic based on image size
+        font_scale = 0.5  # should be dynamic based on image size
+        b = Body(keypoints, confidence)
+        ic(1)
+        ic(b.spine(), b.r_leg_upper())
+        ic(b.hip_angle(), b.knee_angle(), b.armpit_angle())
+        im = cv2.putText(
+            im,
+            f"hip:{b.hip_angle()},armpit:{b.armpit_angle()}, back:{b.spine_vertical()}",
+            (50, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
         for i, conf in enumerate(confidence):
             if conf > 0.5 and is_right_body_part(i):
-                x, y  = keypoints_pixel[i]
+                x, y = keypoints_pixel[i]
                 cv2.circle(im, (int(x), int(y)), 5, (0, 0, 255), -1)
-                cv2.putText(im, get_body_part(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), 2, cv2.LINE_AA)
+                cv2.putText(
+                    im,
+                    get_body_part(i),
+                    (int(x), int(y)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale,
+                    (255, 255, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
                 nothing = False
         if nothing:
             ic("No keypoints found")
 
         return im
-
 
     def frame(self, idx, frame):
 
@@ -131,7 +152,7 @@ def Yolo(
         update_fps_ratio=fps_ratio,
         trim_no_people=trim_no_people,
     )
-    return cv_helper.process_video(input_video,yolo)
+    return cv_helper.process_video(input_video, yolo)
 
 
 if __name__ == "__main__":
