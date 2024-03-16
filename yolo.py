@@ -9,6 +9,7 @@ from icecream import ic
 import cv2
 import typer
 import os.path
+from pose_helper import BodyPart, get_body_part, is_right_body_part
 
 app = typer.Typer()
 
@@ -27,7 +28,8 @@ class YoloProcessor:
     def create(self, input_video):
         self.video = input_video
         self.fps = input_video.get(cv2.CAP_PROP_FPS)
-        self.yolo = YOLO('yolov8n-seg.pt')  # pretrained YOLOv8n model
+        # self.yolo = YOLO('yolov8n-seg.pt')  # pretrained YOLOv8n model
+        self.yolo = YOLO('yolov8n-pose.pt')  # pretrained YOLOv8n model
         self.yolo_filename = f"{self.base_filename}_yolo.mp4"
         self.yolo_writer = cv_helper.LazyVideoWriter(self.yolo_filename, self.fps)
         self.output_video_files = [self.yolo_writer]
@@ -40,6 +42,30 @@ class YoloProcessor:
         cv2.destroyAllWindows()
         for f in self.output_video_files:
             f.release()
+
+    def add_pose(self, im):
+        # self
+        im = cv2.putText(im, "Hello, World!", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+        # get highest confidence person
+
+        kp = self.results[0].keypoints
+        keypoints = kp.xyn[0]
+        keypoints_pixel = kp.xy[0]
+        confidence = kp.conf[0]
+        # ic(keypoints, confidence)
+        nothing = True
+        font_scale = 0.5 # should be dynamic based on image size
+        for i, conf in enumerate(confidence):
+            if conf > 0.5 and is_right_body_part(i):
+                x, y  = keypoints_pixel[i]
+                cv2.circle(im, (int(x), int(y)), 5, (0, 0, 255), -1)
+                cv2.putText(im, get_body_part(i), (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), 2, cv2.LINE_AA)
+                nothing = False
+        if nothing:
+            ic("No keypoints found")
+
+        return im
+
 
     def frame(self, idx, frame):
 
@@ -69,7 +95,9 @@ class YoloProcessor:
                 write_frame = False
 
         if write_frame:
-            self.yolo_writer.write(cv_helper.PIL_to_open_cv(self.results[0].plot()))
+            base_image = self.results[0].plot()
+            base_image = self.add_pose(base_image)
+            self.yolo_writer.write(base_image)
 
 
 @app.command()
