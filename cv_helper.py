@@ -115,6 +115,24 @@ def open_cv_to_PIL(frame):
     return img_pil
 
 
+def write_text(image, text, origin, font_scale=1.0):
+    # TODO, shift fonts if canvas is small
+    x, y = origin
+    for line in text.split("\n"):
+        image = cv2.putText(
+            image,
+            line,
+            (x, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        y += 40 * font_scale
+    return image
+
+
 # TODO: Would be cool if detected in what system you are (cli,cli/w/term,jupyter)
 def display_jupyter(frame):
     from IPython.display import display, Image, clear_output

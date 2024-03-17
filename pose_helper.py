@@ -31,7 +31,13 @@ def get_body_part(index):
 
 
 # get only right body parts
-def is_right_body_part(index):
+def is_interesting_body_part(index):
+    # nose is false
+    if index == 0:
+        return False
+    # skip eye
+    if index == 1 or index == 2:
+        return False
     return index % 2 == 0
 
 
