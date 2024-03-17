@@ -115,3 +115,40 @@ def bone_to_vertical(bone1: Bone):
     x1, y1 = bone1.bottom
     x2, y2 = bone1.top
     return abs(int(math.degrees(math.atan2(x2 - x1, y2 - y1))))
+
+
+def add_pose(results, im):
+    import cv_helper
+    import cv2
+
+    # self
+    # get highest confidence person
+
+    kp = results[0].keypoints  # noqa
+    keypoints = kp.xyn[0]
+    keypoints_pixel = kp.xy[0]
+    confidence = kp.conf[0]
+    # ic(keypoints, confidence)
+    font_scale = 0.5  # should be dynamic based on image size
+    b = Body(keypoints, confidence)
+    ic(1)
+    ic(b.spine(), b.r_leg_upper())
+    ic(b.hip_angle(), b.knee_angle(), b.armpit_angle())
+    im = cv_helper.write_text(
+        im,
+        f"hip:{b.hip_angle()}\narmpit:{b.armpit_angle()}\nback:{b.spine_vertical()}",
+        (50, 200),
+        1,
+    )
+    for i, conf in enumerate(confidence):
+        if conf > 0.5 and is_interesting_body_part(i):
+            x, y = keypoints_pixel[i]
+            origin = (int(x), int(y))
+            cv2.circle(im, origin, 5, (0, 0, 255), -1)
+            cv_helper.write_text(
+                im,
+                get_body_part(i),
+                origin,
+                font_scale,
+            )
+    return im
