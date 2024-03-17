@@ -7,6 +7,8 @@ import typer
 import numpy as np
 from PIL import Image
 from typing_extensions import Protocol
+import threading
+import queue
 
 
 def cv2_video(path):
@@ -73,14 +75,19 @@ def video_reader(input_video):
         yield frame
 
 
-# Use a lazy video writer so don't have to pass in an
-# height/width, can read from first frame.
 class LazyVideoWriter:
     def __init__(self, name: str, fps: int):
         self.name = name
         self.height, self.width = 0, 0
         self.vw = None
         self.fps = fps
+        self.frame_queue = queue.Queue()
+        self.frame_available = (
+            threading.Event()
+        )  # Event to signal when a frame is added
+        self.stop_thread = False
+        self.write_thread = threading.Thread(target=self.process_queue)
+        self.write_thread.start()
 
     def create(self, frame):
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -90,16 +97,34 @@ class LazyVideoWriter:
         )
 
     def write(self, frame):
-        if self.vw is None:
-            self.create(frame)
-        width, height = int(frame.shape[1]), int(frame.shape[0])
-        assert width == self.width
-        assert height == self.height
-        self.vw.write(frame)
+        self.frame_queue.put(frame)
+        self.frame_available.set()  # Signal that a new frame is available
+
+    def process_queue(self):
+        while not self.stop_thread or not self.frame_queue.empty():
+            self.frame_available.wait()  # Wait for a frame to become available
+            if not self.frame_queue.empty():
+                frame = self.frame_queue.get()
+                if self.vw is None:
+                    self.create(frame)
+                width, height = int(frame.shape[1]), int(frame.shape[0])
+                assert (
+                    width == self.width and height == self.height
+                ), "Frame dimensions do not match."
+                self.vw.write(frame)
+                if self.frame_queue.empty():
+                    self.frame_available.clear()  # Reset the event if no more frames are available
 
     def release(self):
+        self.stop_thread = True
+        self.frame_available.set()  # Ensure the thread wakes up to process the stop signal
+        self.write_thread.join()
         if self.vw:
             self.vw.release()
+
+
+# Use a lazy video writer so don't have to pass in an
+# height/width, can read from first frame.
 
 
 def PIL_to_open_cv(pil_img):
