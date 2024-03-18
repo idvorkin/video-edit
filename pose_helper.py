@@ -56,10 +56,16 @@ class Body:
     def get_part(self, part: BodyPart):
         return self.keypoints[part.value]
 
+    def neck(self) -> Bone:
+        return self.make_bone(BodyPart.RIGHT_SHOULDER, BodyPart.RIGHT_EAR)
+
     def spine(self) -> Bone:
-        return self.make_bone(BodyPart.RIGHT_HIP, BodyPart.RIGHT_EAR)
+        return self.make_bone(BodyPart.RIGHT_HIP, BodyPart.RIGHT_SHOULDER)
 
     def r_upper_arm(self) -> Bone:
+        return self.make_bone(BodyPart.RIGHT_SHOULDER, BodyPart.RIGHT_ELBOW)
+
+    def r_total_arm(self) -> Bone:
         return self.make_bone(BodyPart.RIGHT_SHOULDER, BodyPart.RIGHT_ELBOW)
 
     def r_arm_lower(self) -> Bone:
@@ -83,6 +89,11 @@ class Body:
     def spine_vertical(self):
         return bone_to_vertical(self.spine())
 
+    def neck_to_head(self):
+        neck = bone_to_vertical(self.neck())
+        spine = bone_to_vertical(self.spine())
+        return int(neck - spine)
+
 
 def make_angle(bone1: Bone, bone2: Bone) -> float:
 
@@ -105,16 +116,15 @@ def make_angle(bone1: Bone, bone2: Bone) -> float:
     return int(math.degrees(angle_1 + angle2))
 
 
-def bone_to_horizontal(bone1: Bone):
-    x1, y1 = bone1.bottom
-    x2, y2 = bone1.top
-    return abs(int(math.degrees(math.atan2(y2 - y1, x2 - x1))))
+def bone_to_horizontal(bone: Bone):
+    x1, y1 = bone.bottom
+    x2, y2 = bone.top
+    angle_in_radians = math.atan2(y2 - y1, x2 - x1)  # Swap x and y
+    return int(abs(math.degrees(angle_in_radians)))
 
 
-def bone_to_vertical(bone1: Bone):
-    x1, y1 = bone1.bottom
-    x2, y2 = bone1.top
-    return abs(int(math.degrees(math.atan2(x2 - x1, y2 - y1))))
+def bone_to_vertical(bone: Bone):
+    return abs(int(90 - bone_to_horizontal(bone)))
 
 
 def add_pose(results, im):
@@ -131,12 +141,15 @@ def add_pose(results, im):
     # ic(keypoints, confidence)
     font_scale = 0.5  # should be dynamic based on image size
     b = Body(keypoints, confidence)
-    ic(1)
-    ic(b.spine(), b.r_leg_upper())
-    ic(b.hip_angle(), b.knee_angle(), b.armpit_angle())
+    stats = f"""hip:{b.hip_angle()}
+LowerLeg:{bone_to_vertical(b.r_leg_lower())}
+Back:{b.spine_vertical()}
+Neck:{b.neck_to_head()}
+arm:{bone_to_horizontal(b.r_total_arm())}
+"""
     im = cv_helper.write_text(
         im,
-        f"hip:{b.hip_angle()}\narmpit:{b.armpit_angle()}\nback:{b.spine_vertical()}",
+        stats,
         (50, 200),
         1,
     )

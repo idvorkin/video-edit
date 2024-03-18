@@ -80,7 +80,7 @@ class YoloProcessor:
                 write_frame = False
 
         if write_frame:
-            base_image = self.results[0].plot()
+            base_image = frame  # self.results[0].plot()
             base_image = self.add_pose(base_image)
             self.yolo_writer.write(base_image)
 
