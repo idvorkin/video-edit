@@ -55,8 +55,7 @@ def process_video(input_video, frame_processor: FrameProcessor):
     ) as progress_bar, process_video_frames_context_manager(
         frame_processor, input_video
     ) as process_frame:
-        for (i, frame) in enumerate(video_reader(input_video)):
-
+        for i, frame in enumerate(video_reader(input_video)):
             # Update UX counters
             fps.update()
             process_frame.frame(i, frame)
@@ -142,7 +141,33 @@ def open_cv_to_PIL(frame):
 
 def write_text(image, text, origin, font_scale=1.0):
     # TODO, shift fonts if canvas is small
+    color_white = (255, 255, 255)
+    color_black = (0, 0, 0)
     x, y = origin
+
+    count_lines = len(text.split("\n"))
+    max_width = max([len(x) for x in text.split("\n")])
+    font_height = 40
+
+    rect_top_left = (x, y - 40 * font_scale)
+    rect_bottom_right = (
+        x + max_width * font_scale * 20,
+        y + font_height * font_scale * count_lines,
+    )
+
+    # convert to ints
+    rect_top_left = tuple(map(int, rect_top_left))
+    rect_bottom_right = tuple(map(int, rect_bottom_right))
+
+    # draw box around text
+    image = cv2.rectangle(
+        image,
+        rect_top_left,
+        rect_bottom_right,
+        color_black,
+        -1,
+    )
+
     for line in text.split("\n"):
         image = cv2.putText(
             image,
@@ -150,12 +175,37 @@ def write_text(image, text, origin, font_scale=1.0):
             (x, y),
             cv2.FONT_HERSHEY_SIMPLEX,
             font_scale,
-            (255, 255, 255),
+            color_white,
             2,
             cv2.LINE_AA,
         )
-        y += 40 * font_scale
+        y += font_height * font_scale
     return image
+
+
+def scale_point_to_image(image, point):
+    """
+    Scales a normalized point (0 to 1) to the image dimensions.
+
+    Args:
+        image: The image to which the point will be scaled.
+        point: A tuple representing the normalized (x, y) coordinates of the point.
+
+    Returns:e
+        A tuple representing the scaled (x, y) coordinates of the point.
+    """
+
+    # assert valid param types
+    assert isinstance(image, np.ndarray)
+    assert len(point) == 2
+    # assert points between 0 and 1
+    assert 0 <= point[0] <= 1
+    assert 0 <= point[1] <= 1
+
+    img_height, img_width = image.shape[:2]
+    scaled_x = int(point[0] * img_width)
+    scaled_y = int(point[1] * img_height)
+    return (scaled_x, scaled_y)
 
 
 # TODO: Would be cool if detected in what system you are (cli,cli/w/term,jupyter)
