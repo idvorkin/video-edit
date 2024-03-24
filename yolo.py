@@ -16,7 +16,11 @@ app = typer.Typer()
 
 class YoloProcessor:
     def __init__(
-        self, base_filename, update_fps_ratio=0.0, people_only=False, trim_no_people=False
+        self,
+        base_filename,
+        update_fps_ratio=0.0,
+        people_only=False,
+        trim_no_people=False,
     ):
         self.base_filename = base_filename
         self.update_fps_ratio = update_fps_ratio
@@ -43,18 +47,12 @@ class YoloProcessor:
         for f in self.output_video_files:
             f.release()
 
-    def add_pose(self, im):
-        return pose_helper.add_pose(self.results, im)
-
     def frame(self, idx, frame):
-
         # results don't move so frequently that we need to re-yolo
         # on each frame, so just do every 500ms
 
         if idx % self.update_freq == 0:
             self.results = self.yolo(frame)
-
-        predictions = self.results[0].names
 
         is_jupyter = False
         if is_jupyter:
@@ -75,7 +73,7 @@ class YoloProcessor:
 
         if write_frame:
             base_image = frame  # self.results[0].plot()
-            base_image = self.add_pose(base_image)
+            base_image = pose_helper.add_pose(base_image, base_image)
             self.yolo_writer.write(base_image)
 
 
