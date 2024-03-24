@@ -9,20 +9,14 @@ from icecream import ic
 import cv2
 import typer
 import os.path
-from pose_helper import (
-    BodyPart,
-    get_body_part,
-    is_interesting_body_part,
-    Body,
-    add_pose,
-)
+import pose_helper
 
 app = typer.Typer()
 
 
 class YoloProcessor:
     def __init__(
-        self, base_filename, update_fps_ratio=0, people_only=False, trim_no_people=False
+        self, base_filename, update_fps_ratio=0.0, people_only=False, trim_no_people=False
     ):
         self.base_filename = base_filename
         self.update_fps_ratio = update_fps_ratio
@@ -50,7 +44,7 @@ class YoloProcessor:
             f.release()
 
     def add_pose(self, im):
-        return add_pose(self.results, im)
+        return pose_helper.add_pose(self.results, im)
 
     def frame(self, idx, frame):
 
