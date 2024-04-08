@@ -51,8 +51,12 @@ class YoloProcessor:
         # results don't move so frequently that we need to re-yolo
         # on each frame, so just do every 500ms
 
-        if idx % self.update_freq == 0:
+        if idx % self.update_freq != 0:
             self.results = self.yolo(frame)
+
+        if not self.results:
+            # no frame to process
+            return
 
         is_jupyter = False
         if is_jupyter:
@@ -73,7 +77,7 @@ class YoloProcessor:
 
         if write_frame:
             base_image = frame  # self.results[0].plot()
-            base_image = pose_helper.add_pose(base_image, base_image)
+            base_image = pose_helper.add_pose(self.results, base_image)
             self.yolo_writer.write(base_image)
 
 
