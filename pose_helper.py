@@ -1,7 +1,8 @@
 from enum import Enum
-from typing import NamedTuple, List
+from typing import NamedTuple
 import math
 import torch
+import ultralytics
 
 
 # Mapping from index to body part
@@ -44,11 +45,50 @@ def is_interesting_body_part(index):
 Bone = NamedTuple("Bone", [("bottom", torch.tensor), ("top", torch.tensor)])
 
 
+class SwingRepCounter:
+    def __init__(self):
+        self.HINGE = 0
+        self.STRAIT = 1
+        self.rep = 0
+        self.state = self.HINGE
+        self.transition_counter = 0
+        # Threshold for confirming a state transition
+        self.transition_threshold = 5  # Adjust based on your needs
+
+    def frame(self, is_hinge: bool):
+        if is_hinge:
+            if self.state == self.STRAIT:
+                # Increment transition counter if there's a potential transition
+                self.transition_counter += 1
+                # Check if the transition is confirmed (exceeded the threshold)
+                if self.transition_counter >= self.transition_threshold:
+                    self.rep += 1
+                    self.state = self.HINGE
+                    # Reset the counter after confirming the transition
+                    self.transition_counter = 0
+            else:
+                # Reset the counter if it's a false alarm
+                self.transition_counter = 0
+        else:
+            if self.state == self.HINGE:
+                # Increment transition counter if there's a potential transition
+                self.transition_counter += 1
+                # Transition to STRAIT if confirmed
+                if self.transition_counter >= self.transition_threshold:
+                    self.state = self.STRAIT
+                    # Reset the counter after confirming the transition
+                    self.transition_counter = 0
+            else:
+                # Reset the counter if it returns to STRAIT without a full transition
+                self.transition_counter = 0
+
+
 class Body:
     # take a [(x,y)],[conf] as input
-    def __init__(self, keypoints: List[[int, int]], conf):
-        self.keypoints = keypoints
-        self.conf = conf
+    def __init__(self, keypoints: ultralytics.engine.results.Keypoints):
+        self.predicted_keypoints = keypoints
+        self.keypoints = keypoints.xyn[0]
+        self.conf = keypoints.conf[0]
 
     def make_bone(self, bottom: BodyPart, top: BodyPart) -> Bone:
         return Bone(self.get_part(bottom), self.get_part(top))
@@ -125,7 +165,7 @@ def bone_to_vertical(bone: Bone):
     return abs(int(90 - bone_to_horizontal(bone)))
 
 
-def add_pose(results, im):
+def add_pose(keypoints: ultralytics.engine.results.Keypoints, frame, rep, im):
     import cv_helper
     import cv2
 
@@ -134,21 +174,23 @@ def add_pose(results, im):
 
     # validate keypoints
 
-    kp = results[0].keypoints  # noqa
-    keypoints = kp.xyn[0]
-    keypoints_pixel = kp.xy[0]
-    confidence = kp.conf[0]
+    keypoints_xyn = keypoints.xyn[0]
+    keypoints_pixel = keypoints.xy[0]
+    confidence = keypoints.conf[0]
     # ic(keypoints, confidence)
     font_scale = 0.5  # should be dynamic based on image size
-    b = Body(keypoints, confidence)
-    stats = f""" Hip:{b.hip_angle()}
+    b = Body(keypoints)
+    stats = f""" REP: {rep}
+ Hip:{b.hip_angle()}
  LowerLeg:{bone_to_vertical(b.r_leg_lower())}
  Back:{b.spine_vertical()}
  Neck:{b.neck_to_head()}
- Arm:{bone_to_horizontal(b.r_total_arm())}"""
+ Arm:{bone_to_horizontal(b.r_total_arm())}
+ Frame:{frame}
+ """
 
     # if person is on the left, draw the box on the right
-    is_on_right = keypoints[BodyPart.RIGHT_HIP.value][0] > 0.5
+    is_on_right = keypoints_xyn[BodyPart.RIGHT_HIP.value][0] > 0.5
     box_top_left = [0, 200]
     box_top_left[0] = 50 if is_on_right else im.shape[1] - 400
     # ic(is_on_right, box_top_left,im.shape)
