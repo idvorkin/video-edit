@@ -187,8 +187,9 @@ def add_pose(results, im):
         (255, 0, 255),
         (0, 255, 255),
     )
-    colors = [blue, red, green, purple, yellow, blue]
-    for color, bone in zip(colors * 2, bones):
+    colors = [blue, red, green, purple, yellow, blue, red, green, purple, yellow, blue]
+    for i, bone in enumerate(bones):
+        color = colors[i]
         # give a different color to each bone, handle more bones then colors
         # bone is normalized 0->1, scale to image resolution
         im = cv2.line(
