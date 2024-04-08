@@ -96,23 +96,22 @@ class Body:
 
 
 def make_angle(bone1: Bone, bone2: Bone) -> float:
-    hold_bone = bone1
-
     if torch.equal(bone1.top, bone2.top):
         # if passed in wrong ends swap them
-        hold_bone = Bone(bone2.top, bone2.bottom)
+        bone2 = Bone(bone2.top, bone2.bottom)
     else:
         assert torch.equal(
-            bone1.bottom, hold_bone.bottom
+            bone1.bottom, bone2.bottom
         ), "Both bones should have same bottom"
 
-    x1, y1 = bone1.bottom
-    x2, y2 = bone1.top
-    x3, y3 = hold_bone.top
+    touch = bone1.bottom
+    top_end = bone1.top
+    bottom_end = bone2.top
+
     # I need to add both angles
-    angle_1 = math.atan2(y2 - y1, x2 - x1)
-    angle2 = math.atan2(y3 - y2, x3 - x2)
-    return int(math.degrees(angle_1 + angle2))
+    top_bone_angle = math.atan2(top_end[1] - touch[1], top_end[0] - touch[0])
+    bottom_bone_angle = math.atan2(bottom_end[1] - touch[1], bottom_end[0] - top_end[0])
+    return int(math.degrees(abs(top_bone_angle) + abs(bottom_bone_angle)))
 
 
 def bone_to_horizontal(bone: Bone):
@@ -133,6 +132,8 @@ def add_pose(results, im):
     # self
     # get highest confidence person
 
+    # validate keypoints
+
     kp = results[0].keypoints  # noqa
     keypoints = kp.xyn[0]
     keypoints_pixel = kp.xy[0]
@@ -146,10 +147,16 @@ def add_pose(results, im):
  Neck:{b.neck_to_head()}
  Arm:{bone_to_horizontal(b.r_total_arm())}"""
 
+    # if person is on the left, draw the box on the right
+    is_on_right = keypoints[BodyPart.RIGHT_HIP.value][0] > 0.5
+    box_top_left = [0, 200]
+    box_top_left[0] = 50 if is_on_right else im.shape[1] - 400
+    # ic(is_on_right, box_top_left,im.shape)
+
     im = cv_helper.write_text(
         im,
         stats,
-        (50, 200),
+        box_top_left,
         1,
     )
     for i, conf in enumerate(confidence):
