@@ -51,7 +51,7 @@ def process_video(input_video, frame_processor: FrameProcessor):
     # start the FPS timer
     fps = FPS().start()
     with typer.progressbar(
-        length=frame_count, label="Processing Video"
+        length=100, label="Processing Video"
     ) as progress_bar, process_video_frames_context_manager(
         frame_processor, input_video
     ) as process_frame:
@@ -59,7 +59,8 @@ def process_video(input_video, frame_processor: FrameProcessor):
             # Update UX counters
             fps.update()
             process_frame.frame(i, frame)
-            progress_bar.update(1)
+            if (i % int(frame_count / 100)) == 0:
+                progress_bar.update(1)
 
     # stop the timer and display FPS information
     fps.stop()
