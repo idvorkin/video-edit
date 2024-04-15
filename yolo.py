@@ -14,6 +14,9 @@ from typing import List
 import pickle
 from pathlib import Path
 from pydantic import BaseModel
+import datetime
+import os
+
 
 
 app = typer.Typer()
@@ -66,8 +69,10 @@ class SwingsProcessor:
         self,
         base_filename,
         yolo_frames_path: Path,
+        label:str
     ):
         self.base_filename = base_filename
+        self.label = label
         with open(yolo_frames_path.name, "rb") as f:
             self.yolo_frames = pickle.load(f)
 
@@ -108,7 +113,7 @@ class SwingsProcessor:
             is_hinge=pose_helper.Body(self.results).spine_vertical() < 45
         )
         base_image = pose_helper.add_pose(
-            keypoints=self.results, im=base_image, frame=idx, rep=self.rep_counter.rep
+            keypoints=self.results, im=base_image, frame=idx, rep=self.rep_counter.rep, label=self.label
         )
         self.yolo_writer.write(base_image)
 
@@ -137,6 +142,8 @@ def yolo(
 def swings(
     video_input_file: str = typer.Argument("in.mp4"),
     force: bool = typer.Option(False),
+    label: str = str(datetime.datetime.now().strftime("%Y-%m-%d")),
+    open: bool = True
 ) -> None:
     """
     Remove background from Ring Video
@@ -158,9 +165,14 @@ def swings(
     yolo = SwingsProcessor(
         base_filename,
         yolo_frames_path=Path(f"{base_filename}.yolo_frames.pickle.gz"),
+        label=label
     )
 
     cv_helper.process_video(input_video, yolo)
+    if open:
+        # run shell open on the video
+        os.system(f"open {yolo.yolo_filename}")
+
     return
 
 

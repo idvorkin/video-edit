@@ -165,7 +165,7 @@ def bone_to_vertical(bone: Bone):
     return abs(int(90 - bone_to_horizontal(bone)))
 
 
-def add_pose(keypoints: ultralytics.engine.results.Keypoints, frame, rep, im):
+def add_pose(keypoints: ultralytics.engine.results.Keypoints, frame, rep, im, label):
     import cv_helper
     import cv2
 
@@ -187,6 +187,7 @@ def add_pose(keypoints: ultralytics.engine.results.Keypoints, frame, rep, im):
  Neck:{b.neck_to_head()}
  Arm:{bone_to_horizontal(b.r_total_arm())}
  Frame:{frame}
+ {label}
  """
 
     # if person is on the left, draw the box on the right
