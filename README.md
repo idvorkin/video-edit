@@ -9,9 +9,8 @@ My explorations on video editting and computer vision.
 
 ## Swing alyzer
 
-I love doing kettlebell swings, but then I realized I was doing them wrong. Instead of fixing my swing form, I wrote an app to analyze them.  Independantly, I fixed my swing form
+I love doing kettlebell swings, but then I realized I was doing them wrong. Instead of fixing my swing form, I wrote an app to analyze them.  Independantly, I fixed my swing form. https://youtu.be/BD6Sys1GIuU?si=tVnJMGwbD34SPFw5
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/BD6Sys1GIuU?si=sZLSI7t_8Rs1n1ie" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 
 ## Other work
