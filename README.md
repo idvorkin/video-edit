@@ -11,7 +11,7 @@ My explorations on video editting and computer vision.
 
 I love doing kettlebell swings, but then I realized I was doing them wrong. Instead of fixing my swing form, I wrote an app to analyze them.  Independantly, I fixed my swing form. https://youtu.be/BD6Sys1GIuU?si=tVnJMGwbD34SPFw5
 
-
+[swings.webm](https://github.com/idvorkin/video-edit/assets/280981/023149fc-ac58-44b7-8d72-50a4841f02da)
 
 ## Other work
 
