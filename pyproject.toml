@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "video-edit"
+version = "0.1.0"
+description = "Video editing utilities and tools"
+authors = [
+    { name="Igor Dvorkin", email="igor@dvorkin.net" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+dependencies = [
+    "arrow",
+    "altair",
+    "ipython",
+    "jupyter",
+    "jupyterlab",
+    "matplotlib",
+    "matplotlib-venn",
+    "pandas_datareader",
+    "nbdime",
+    "pandas",
+    "pdfrw",
+    "seaborn",
+    "scikit-learn",
+    "mypy",
+    "nltk",
+    "wordcloud",
+    "spacy",
+    "jupytext",
+    "humanize",
+    "lime",
+    "sympy",
+    "beautifulsoup4",
+    "jupyterlab-vim",
+    "dask",
+    "fsspec",
+    "numpy",
+    "opencv-python",
+    "pillow",
+    "icecream",
+    "imutils",
+    "imgaug",
+    "pixellib",
+    "torch",
+    "torchvision",
+    "ultralytics"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "rope",
+    "black",
+    "pylint",
+    "pylama",
+    "mypy",
+    "pytest-timeout",
+    "pytest-xdist"
+]
+
+[tool.setuptools]
+py-modules = [
+    "yolo",
+    "filter_to_motion",
+    "pose_helper",
+    "cv_helper"
+]
+packages = ["samples", "py_generated"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+timeout = 300  # 5 minutes timeout for tests
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "pass",
+] 

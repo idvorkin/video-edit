@@ -18,7 +18,6 @@ import datetime
 import os
 
 
-
 app = typer.Typer()
 
 
@@ -65,12 +64,7 @@ class CaptureYoloData:
 
 
 class SwingsProcessor:
-    def __init__(
-        self,
-        base_filename,
-        yolo_frames_path: Path,
-        label:str
-    ):
+    def __init__(self, base_filename, yolo_frames_path: Path, label: str):
         self.base_filename = base_filename
         self.label = label
         with open(yolo_frames_path.name, "rb") as f:
@@ -113,15 +107,31 @@ class SwingsProcessor:
             is_hinge=pose_helper.Body(self.results).spine_vertical() < 45
         )
         base_image = pose_helper.add_pose(
-            keypoints=self.results, im=base_image, frame=idx, rep=self.rep_counter.rep, label=self.label
+            keypoints=self.results,
+            im=base_image,
+            frame=idx,
+            rep=self.rep_counter.rep,
+            label=self.label,
         )
         self.yolo_writer.write(base_image)
 
 
 @app.command()
 def yolo(
-    video_input_file: str = typer.Argument("in.mp4"),
+    video_input_file: str = typer.Argument(
+        "in.mp4", help="Input video file to process"
+    ),
 ):
+    """
+    Process a video file with YOLO pose detection and save the results.
+
+    This command will:
+    1. Load the video file
+    2. Run YOLO pose detection on the frames
+    3. Save the detection results to a pickle file (filename.yolo_frames.pickle.gz)
+
+    The results can then be used by the 'swings' command for further processing.
+    """
     ic(f"Running Yolo Over {video_input_file}")
     base_filename = video_input_file.split(".")[0]
 
@@ -140,13 +150,30 @@ def yolo(
 
 @app.command()
 def swings(
-    video_input_file: str = typer.Argument("in.mp4"),
-    force: bool = typer.Option(False),
-    label: str = str(datetime.datetime.now().strftime("%Y-%m-%d")),
-    open: bool = True
+    video_input_file: str = typer.Argument(
+        "in.mp4", help="Input video file to process"
+    ),
+    force: bool = typer.Option(
+        False, help="Force processing even if output file exists"
+    ),
+    label: str = typer.Option(
+        str(datetime.datetime.now().strftime("%Y-%m-%d")),
+        help="Label to add to the processed video",
+    ),
+    open: bool = typer.Option(True, help="Open the processed video after completion"),
 ) -> None:
     """
-    Remove background from Ring Video
+    Process a video file to detect and analyze swinging motions.
+
+    This command will:
+    1. Load the pre-processed YOLO detection results
+    2. Analyze spine angles and count repetitions
+    3. Generate an annotated video with pose detection and rep counting
+    4. Save the result as filename_yolo.mp4
+
+    Requirements:
+    - The video must have been processed with the 'yolo' command first
+    - The .yolo_frames.pickle.gz file must exist
     """
     ic(f"Running Yolo Over {video_input_file}")
     base_filename = video_input_file.split(".")[0]
@@ -165,7 +192,7 @@ def swings(
     yolo = SwingsProcessor(
         base_filename,
         yolo_frames_path=Path(f"{base_filename}.yolo_frames.pickle.gz"),
-        label=label
+        label=label,
     )
 
     cv_helper.process_video(input_video, yolo)
