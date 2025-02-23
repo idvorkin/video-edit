@@ -46,7 +46,8 @@ dependencies = [
     "pixellib",
     "torch",
     "torchvision",
-    "ultralytics"
+    "ultralytics",
+    "pytesseract"
 ]
 
 [project.optional-dependencies]
