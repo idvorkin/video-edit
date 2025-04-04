@@ -64,9 +64,17 @@ class CaptureYoloData:
 
 
 class SwingsProcessor:
-    def __init__(self, base_filename, yolo_frames_path: Path, label: str):
+    def __init__(
+        self,
+        base_filename,
+        yolo_frames_path: Path,
+        label: str,
+        body_part_display_seconds: int,
+    ):
         self.base_filename = base_filename
         self.label = label
+        self.body_part_display_seconds = body_part_display_seconds
+        self.current_frame = 0
         with open(yolo_frames_path.name, "rb") as f:
             self.yolo_frames = pickle.load(f)
 
@@ -86,6 +94,9 @@ class SwingsProcessor:
             f.release()
 
     def frame(self, idx, frame):
+        # Track current frame for body part display logic
+        self.current_frame = idx
+
         # results don't move so frequently that we need to re-yolo
         # on each frame, so just do every 500ms
 
@@ -106,12 +117,19 @@ class SwingsProcessor:
         self.rep_counter.frame(
             is_hinge=pose_helper.Body(self.results).spine_vertical() < 45
         )
+
+        # Calculate if body parts should be visible based on frame number and fps
+        show_body_parts = True
+        if self.body_part_display_seconds > 0:
+            show_body_parts = (idx / self.fps) < self.body_part_display_seconds
+
         base_image = pose_helper.add_pose(
             keypoints=self.results,
             im=base_image,
             frame=idx,
             rep=self.rep_counter.rep,
             label=self.label,
+            show_body_parts=show_body_parts,
         )
         self.yolo_writer.write(base_image)
 
@@ -161,6 +179,9 @@ def swings(
         help="Label to add to the processed video",
     ),
     open: bool = typer.Option(True, help="Open the processed video after completion"),
+    body_part_seconds: int = typer.Option(
+        2, help="Number of seconds to display body part labels (0 for always)"
+    ),
 ) -> None:
     """
     Process a video file to detect and analyze swinging motions.
@@ -193,6 +214,7 @@ def swings(
         base_filename,
         yolo_frames_path=Path(f"{base_filename}.yolo_frames.pickle.gz"),
         label=label,
+        body_part_display_seconds=body_part_seconds,
     )
 
     cv_helper.process_video(input_video, yolo)

@@ -140,9 +140,9 @@ def make_angle(bone1: Bone, bone2: Bone) -> float:
         # if passed in wrong ends swap them
         bone2 = Bone(bone2.top, bone2.bottom)
     else:
-        assert torch.equal(
-            bone1.bottom, bone2.bottom
-        ), "Both bones should have same bottom"
+        assert torch.equal(bone1.bottom, bone2.bottom), (
+            "Both bones should have same bottom"
+        )
 
     touch = bone1.bottom
     top_end = bone1.top
@@ -165,7 +165,14 @@ def bone_to_vertical(bone: Bone):
     return abs(int(90 - bone_to_horizontal(bone)))
 
 
-def add_pose(keypoints: ultralytics.engine.results.Keypoints, frame, rep, im, label):
+def add_pose(
+    keypoints: ultralytics.engine.results.Keypoints,
+    frame,
+    rep,
+    im,
+    label,
+    show_body_parts=True,
+):
     import cv_helper
     import cv2
 
@@ -174,11 +181,10 @@ def add_pose(keypoints: ultralytics.engine.results.Keypoints, frame, rep, im, la
 
     # validate keypoints
 
-    keypoints_xyn = keypoints.xyn[0]
     keypoints_pixel = keypoints.xy[0]
     confidence = keypoints.conf[0]
     # ic(keypoints, confidence)
-    font_scale = 0.5  # should be dynamic based on image size
+
     b = Body(keypoints)
     stats = f""" REP: {rep}
  Hip:{b.hip_angle()}
@@ -190,30 +196,31 @@ def add_pose(keypoints: ultralytics.engine.results.Keypoints, frame, rep, im, la
  {label}
  """
 
-    # if person is on the left, draw the box on the right
-    is_on_right = keypoints_xyn[BodyPart.RIGHT_HIP.value][0] > 0.5
-    box_top_left = [0, 200]
-    box_top_left[0] = 50 if is_on_right else im.shape[1] - 400
-    # ic(is_on_right, box_top_left,im.shape)
+    # Position the box in the top right corner with a small margin
+    box_top_left = (im.shape[1] - 250, 20)  # Using tuple instead of list
 
     im = cv_helper.write_text(
         im,
         stats,
         box_top_left,
-        1,
+        0.7,
     )
-    for i, conf in enumerate(confidence):
-        if conf > 0.5 and is_interesting_body_part(i):
-            x, y = keypoints_pixel[i]
-            origin = (int(x), int(y))
-            cv2.circle(im, origin, 5, (0, 0, 255), -1)
-            cv_helper.write_text(
-                im,
-                get_body_part(i),
-                origin,
-                font_scale,
-            )
-    # Draw bones
+
+    # Only show body parts if requested
+    if show_body_parts:
+        for i, conf in enumerate(confidence):
+            if conf > 0.5 and is_interesting_body_part(i):
+                x, y = keypoints_pixel[i]
+                origin = (int(x), int(y))  # Already integers, but ensure it's a tuple
+                cv2.circle(im, origin, 8, (0, 0, 255), -1)
+                cv_helper.write_text(
+                    im,
+                    get_body_part(i),
+                    origin,
+                    0.8,  # Fixed font scale value
+                )
+
+    # Draw bones (always)
     bones = [
         b.neck(),
         b.spine(),
@@ -240,7 +247,7 @@ def add_pose(keypoints: ultralytics.engine.results.Keypoints, frame, rep, im, la
             cv_helper.scale_point_to_image(im, bone.bottom),
             cv_helper.scale_point_to_image(im, bone.top),
             color,
-            2,
+            3,  # Increased line thickness from 2 to 3
         )
 
     return im

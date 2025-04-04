@@ -50,11 +50,12 @@ def process_video(input_video, frame_processor: FrameProcessor):
 
     # start the FPS timer
     fps = FPS().start()
-    with typer.progressbar(
-        length=100, label="Processing Video"
-    ) as progress_bar, process_video_frames_context_manager(
-        frame_processor, input_video
-    ) as process_frame:
+    with (
+        typer.progressbar(length=100, label="Processing Video") as progress_bar,
+        process_video_frames_context_manager(
+            frame_processor, input_video
+        ) as process_frame,
+    ):
         for i, frame in enumerate(video_reader(input_video)):
             # Update UX counters
             fps.update()
@@ -108,9 +109,9 @@ class LazyVideoWriter:
                 if self.vw is None:
                     self.create(frame)
                 width, height = int(frame.shape[1]), int(frame.shape[0])
-                assert (
-                    width == self.width and height == self.height
-                ), "Frame dimensions do not match."
+                assert width == self.width and height == self.height, (
+                    "Frame dimensions do not match."
+                )
                 self.vw.write(frame)
                 if self.frame_queue.empty():
                     self.frame_available.clear()  # Reset the event if no more frames are available
@@ -173,7 +174,7 @@ def write_text(image, text, origin, font_scale=1.0):
         image = cv2.putText(
             image,
             line,
-            (x, y),
+            (int(x), int(y)),
             cv2.FONT_HERSHEY_SIMPLEX,
             font_scale,
             color_white,
