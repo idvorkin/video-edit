@@ -189,7 +189,7 @@ def process_video_with_yolo(
     base_filename = os.path.splitext(base_name)[0]
     yolo_data_path = f"output/{base_filename}-yolo.pickle.gz"
     pickle_path = Path(yolo_data_path)
-    
+
     processor = SwingsProcessor(
         base_filename=output_file.replace('.mp4', ''),
         yolo_frames_path=pickle_path,
@@ -202,7 +202,7 @@ def process_video_with_yolo(
 @app.command()
 def swings(
     video_input_file: str = typer.Argument(
-        "in.mp4", help="Input video file to process"
+        help="Input video file to process"
     ),
     force_yolo: bool = typer.Option(
         False, help="Force regeneration of YOLO data"
@@ -228,18 +228,18 @@ def swings(
         typer.echo("Error: Missing argument 'VIDEO_INPUT_FILE'")
         typer.echo("Try 'python yolo.py swings process --help' for more information.")
         raise typer.Exit(1)
-        
+
     console.print(f"[bold]Running YOLO over[/bold] {video_input_file}")
-    
+
     # Get directory and base filename separately
     base_name = os.path.basename(video_input_file)
     base_filename = os.path.splitext(base_name)[0]
-    
+
     console.print(f"Processing File {video_input_file}, with base {base_filename}")
 
     # Ensure output directory exists
     os.makedirs("output", exist_ok=True)
-    
+
     # Check if YOLO data exists
     yolo_data_file = f"output/{base_filename}-yolo.pickle.gz"
     if not force_yolo and os.path.exists(yolo_data_file):
