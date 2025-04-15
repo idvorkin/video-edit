@@ -10,7 +10,8 @@
 #   "torch",
 #   "matplotlib",
 #   "Pillow",
-#   "imutils"
+#   "imutils",
+#   "rich"
 # ]
 # ///
 # gen-unique-video from video with lots of changeless frames
@@ -30,7 +31,12 @@ from pathlib import Path
 from pydantic import BaseModel
 import datetime
 import os
+import json
+from rich.console import Console
+from rich.prompt import Confirm
+import subprocess
 
+console = Console()
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -148,36 +154,36 @@ class SwingsProcessor:
         self.yolo_writer.write(base_image)
 
 
-@app.command()
-def yolo(
-    video_input_file: str = typer.Argument(
-        "in.mp4", help="Input video file to process"
-    ),
-):
-    """
-    Process a video file with YOLO pose detection and save the results.
-
-    This command will:
-    1. Load the video file
-    2. Run YOLO pose detection on the frames
-    3. Save the detection results to a pickle file (filename.yolo_frames.pickle.gz)
-
-    The results can then be used by the 'swings' command for further processing.
-    """
-    ic(f"Running Yolo Over {video_input_file}")
-    base_filename = video_input_file.split(".")[0]
-
+def process_video(video_input_file: str) -> List[YoloFrame]:
+    """Process a video file with YOLO and return the frames data."""
     input_video = cv2.VideoCapture(video_input_file)
     if not input_video.isOpened():
-        print(f"Unable to Open {video_input_file}")
-        return
+        raise Exception(f"Unable to Open {video_input_file}")
 
-    ic(f"Processing File {video_input_file}, w/{base_filename}")
-    path = Path(f"{base_filename}.yolo_frames.pickle.gz")
+    path = Path(f"output/{os.path.basename(video_input_file)}.yolo_frames.pickle.gz")
     capture = CaptureYoloData(path)
-
     cv_helper.process_video(input_video, capture)
-    return
+    return capture.yolo_frames
+
+def process_video_with_yolo(
+    video_input_file: str,
+    output_file: str,
+    yolo_data: List[YoloFrame],
+    label: bool,
+    body_part_seconds: float,
+):
+    """Process a video file with YOLO data and save the output."""
+    input_video = cv2.VideoCapture(video_input_file)
+    if not input_video.isOpened():
+        raise Exception(f"Unable to Open {video_input_file}")
+
+    processor = SwingsProcessor(
+        base_filename=os.path.splitext(output_file)[0],
+        yolo_frames_path=Path(f"output/{os.path.basename(video_input_file)}.yolo_frames.pickle.gz"),
+        label=str(datetime.datetime.now().strftime("%Y-%m-%d")) if label else "",
+        body_part_display_seconds=body_part_seconds,
+    )
+    cv_helper.process_video(input_video, processor)
 
 
 @app.command()
@@ -185,58 +191,65 @@ def swings(
     video_input_file: str = typer.Argument(
         "in.mp4", help="Input video file to process"
     ),
-    force: bool = typer.Option(
-        False, help="Force processing even if output file exists"
+    force_yolo: bool = typer.Option(
+        False, help="Force regeneration of YOLO data"
     ),
-    label: str = typer.Option(
-        str(datetime.datetime.now().strftime("%Y-%m-%d")),
-        help="Label to add to the processed video",
+    force_video: bool = typer.Option(
+        False, help="Force regeneration of video output"
     ),
-    open: bool = typer.Option(True, help="Open the processed video after completion"),
-    body_part_seconds: int = typer.Option(
-        2, help="Number of seconds to display body part labels (0 for always)"
+    label: bool = typer.Option(
+        False, help="Label the video with swing counts"
     ),
-) -> None:
-    """
-    Process a video file to detect and analyze swinging motions.
+    should_open: bool = typer.Option(
+        True, help="Open the processed video file"
+    ),
+    prompt: bool = typer.Option(
+        False, help="Prompt before generating video output"
+    ),
+    body_part_seconds: float = typer.Option(
+        0.5, help="Seconds to show body part labels"
+    ),
+):
+    """Process a video file to detect and analyze swinging motions."""
+    console.print(f"[bold]Running YOLO over[/bold] {video_input_file}")
+    base_filename = video_input_file.rsplit(".", 1)[0]
+    console.print(f"Processing File {video_input_file}, with base {base_filename}")
 
-    This command will:
-    1. Load the pre-processed YOLO detection results
-    2. Analyze spine angles and count repetitions
-    3. Generate an annotated video with pose detection and rep counting
-    4. Save the result as filename_yolo.mp4
+    # Ensure output directory exists
+    os.makedirs("output", exist_ok=True)
 
-    Requirements:
-    - The video must have been processed with the 'yolo' command first
-    - The .yolo_frames.pickle.gz file must exist
-    """
-    ic(f"Running Yolo Over {video_input_file}")
-    base_filename = video_input_file.split(".")[0]
-    unique_filename = f"{base_filename}_unique.mp4"
+    # Check if YOLO data exists
+    yolo_data_file = f"output/{base_filename}-yolo.pickle.gz"
+    if not force_yolo and os.path.exists(yolo_data_file):
+        console.print(f"[green]Using existing YOLO data from[/green] {yolo_data_file}")
+        with open(yolo_data_file, "rb") as f:
+            yolo_data = pickle.load(f)
+    else:
+        console.print("[yellow]Generating new YOLO data[/yellow]")
+        yolo_data = process_video(video_input_file)
+        with open(yolo_data_file, "wb") as f:
+            pickle.dump(yolo_data, f)
 
-    if not force and os.path.exists(unique_filename):
-        print(f"{unique_filename} exists, skipping")
-        return
+    # Process the video with YOLO data
+    output_file = f"output/{base_filename}-out_yolo.mp4"
+    if not force_video and os.path.exists(output_file):
+        console.print(f"[green]Using existing video output[/green] {output_file}")
+    else:
+        if prompt:
+            if not Confirm.ask(f"Generate video output {output_file}?"):
+                return
+        console.print("[yellow]Generating new video output[/yellow]")
+        process_video_with_yolo(
+            video_input_file,
+            output_file,
+            yolo_data,
+            label=label,
+            body_part_seconds=body_part_seconds,
+        )
 
-    input_video = cv2.VideoCapture(video_input_file)
-    if not input_video.isOpened():
-        print(f"Unable to Open {video_input_file}")
-        return
-
-    ic(f"Processing File {video_input_file}, w/{base_filename}")
-    yolo = SwingsProcessor(
-        base_filename,
-        yolo_frames_path=Path(f"{base_filename}.yolo_frames.pickle.gz"),
-        label=label,
-        body_part_display_seconds=body_part_seconds,
-    )
-
-    cv_helper.process_video(input_video, yolo)
-    if open:
-        # run shell open on the video
-        os.system(f"open {yolo.yolo_filename}")
-
-    return
+    if should_open:
+        console.print("[yellow]Opening video output[/yellow]")
+        subprocess.run(["open", output_file])
 
 
 if __name__ == "__main__":
