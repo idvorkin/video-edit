@@ -211,12 +211,22 @@ def swings(
     ),
 ):
     """Process a video file to detect and analyze swinging motions."""
+    if video_input_file is None:
+        typer.echo("Error: Missing argument 'VIDEO_INPUT_FILE'")
+        typer.echo("Try 'python yolo.py swings process --help' for more information.")
+        raise typer.Exit(1)
+        
     console.print(f"[bold]Running YOLO over[/bold] {video_input_file}")
     base_filename = video_input_file.rsplit(".", 1)[0]
     console.print(f"Processing File {video_input_file}, with base {base_filename}")
 
     # Ensure output directory exists
     os.makedirs("output", exist_ok=True)
+    
+    # Create output directory for the specific video if it's in a subdirectory
+    output_dir = os.path.dirname(f"output/{base_filename}")
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
     # Check if YOLO data exists
     yolo_data_file = f"output/{base_filename}-yolo.pickle.gz"
