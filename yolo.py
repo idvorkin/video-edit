@@ -1,4 +1,18 @@
-#!python3
+#!/usr/bin/env -S uv run --
+# /// script
+# dependencies = [
+#   "ultralytics",
+#   "opencv-python",
+#   "typer",
+#   "icecream",
+#   "pydantic",
+#   "numpy",
+#   "torch",
+#   "matplotlib",
+#   "Pillow",
+#   "imutils"
+# ]
+# ///
 # gen-unique-video from video with lots of changeless frames
 
 
@@ -18,7 +32,7 @@ import datetime
 import os
 
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True)
 
 
 class YoloResult(BaseModel):
