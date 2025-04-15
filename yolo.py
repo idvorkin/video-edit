@@ -40,6 +40,9 @@ console = Console()
 
 app = typer.Typer(no_args_is_help=True)
 
+# YOLO model path constant
+YOLO_POSE_MODEL = "yolo11n-pose.pt"
+
 
 class YoloResult(BaseModel):
     keypoints: List
@@ -61,11 +64,11 @@ class CaptureYoloData:
 
     def create(self, input_video):
         # self.yolo = YOLO('yolov8n-seg.pt')  # pretrained YOLOv8n model
-        self.yolo = YOLO("yolov8n-pose.pt")  # pretrained YOLOv8n model
+        self.yolo = YOLO(YOLO_POSE_MODEL)  # pretrained YOLOv8n model
 
     def destroy(self):
         # write to gz file
-        with open(self.pickle_path.name, "wb") as f:
+        with open(self.pickle_path, "wb") as f:
             pickle.dump(self.yolo_frames, f)
 
     def frame(self, idx, frame):
@@ -95,15 +98,15 @@ class SwingsProcessor:
         self.label = label
         self.body_part_display_seconds = body_part_display_seconds
         self.current_frame = 0
-        with open(yolo_frames_path.name, "rb") as f:
+        with open(yolo_frames_path, "rb") as f:
             self.yolo_frames = pickle.load(f)
 
     def create(self, input_video):
         self.video = input_video
         self.fps = input_video.get(cv2.CAP_PROP_FPS)
         # self.yolo = YOLO('yolov8n-seg.pt')  # pretrained YOLOv8n model
-        self.yolo = YOLO("yolov8n-pose.pt")  # pretrained YOLOv8n model
-        self.yolo_filename = f"{self.base_filename}_yolo.mp4"
+        self.yolo = YOLO(YOLO_POSE_MODEL)  # pretrained YOLOv8n model
+        self.yolo_filename = f"{self.base_filename}.mp4"
         self.yolo_writer = cv_helper.LazyVideoWriter(self.yolo_filename, self.fps)
         self.output_video_files = [self.yolo_writer]
         self.rep_counter = pose_helper.SwingRepCounter()
@@ -160,7 +163,11 @@ def process_video(video_input_file: str) -> List[YoloFrame]:
     if not input_video.isOpened():
         raise Exception(f"Unable to Open {video_input_file}")
 
-    path = Path(f"output/{os.path.basename(video_input_file)}.yolo_frames.pickle.gz")
+    # Get directory and base filename separately
+    base_name = os.path.basename(video_input_file)
+    base_filename = os.path.splitext(base_name)[0]
+    yolo_data_path = f"output/{base_filename}-yolo.pickle.gz"
+    path = Path(yolo_data_path)
     capture = CaptureYoloData(path)
     cv_helper.process_video(input_video, capture)
     return capture.yolo_frames
@@ -177,9 +184,15 @@ def process_video_with_yolo(
     if not input_video.isOpened():
         raise Exception(f"Unable to Open {video_input_file}")
 
+    # Get directory and base filename separately
+    base_name = os.path.basename(video_input_file)
+    base_filename = os.path.splitext(base_name)[0]
+    yolo_data_path = f"output/{base_filename}-yolo.pickle.gz"
+    pickle_path = Path(yolo_data_path)
+    
     processor = SwingsProcessor(
-        base_filename=os.path.splitext(output_file)[0],
-        yolo_frames_path=Path(f"output/{os.path.basename(video_input_file)}.yolo_frames.pickle.gz"),
+        base_filename=output_file.replace('.mp4', ''),
+        yolo_frames_path=pickle_path,
         label=str(datetime.datetime.now().strftime("%Y-%m-%d")) if label else "",
         body_part_display_seconds=body_part_seconds,
     )
@@ -217,17 +230,16 @@ def swings(
         raise typer.Exit(1)
         
     console.print(f"[bold]Running YOLO over[/bold] {video_input_file}")
-    base_filename = video_input_file.rsplit(".", 1)[0]
+    
+    # Get directory and base filename separately
+    base_name = os.path.basename(video_input_file)
+    base_filename = os.path.splitext(base_name)[0]
+    
     console.print(f"Processing File {video_input_file}, with base {base_filename}")
 
     # Ensure output directory exists
     os.makedirs("output", exist_ok=True)
     
-    # Create output directory for the specific video if it's in a subdirectory
-    output_dir = os.path.dirname(f"output/{base_filename}")
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-
     # Check if YOLO data exists
     yolo_data_file = f"output/{base_filename}-yolo.pickle.gz"
     if not force_yolo and os.path.exists(yolo_data_file):
@@ -241,7 +253,7 @@ def swings(
             pickle.dump(yolo_data, f)
 
     # Process the video with YOLO data
-    output_file = f"output/{base_filename}-out_yolo.mp4"
+    output_file = f"output/{base_filename}-processed.mp4"
     if not force_video and os.path.exists(output_file):
         console.print(f"[green]Using existing video output[/green] {output_file}")
     else:
@@ -259,7 +271,20 @@ def swings(
 
     if should_open:
         console.print("[yellow]Opening video output[/yellow]")
-        subprocess.run(["open", output_file])
+        if os.path.exists(output_file):
+            subprocess.run(["open", output_file])
+        else:
+            console.print(f"[red]Error: Output file not found at {output_file}[/red]")
+            # Try to find the file with a similar name
+            import glob
+            possible_files = glob.glob(f"output/*{base_filename}*.mp4")
+            if possible_files:
+                console.print(f"[yellow]Found similar files:[/yellow]")
+                for f in possible_files:
+                    console.print(f"  {f}")
+                # Open the first one
+                subprocess.run(["open", possible_files[0]])
+                console.print(f"[green]Opened {possible_files[0]}[/green]")
 
 
 if __name__ == "__main__":
