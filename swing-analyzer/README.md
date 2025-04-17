@@ -63,6 +63,24 @@ The built files will be available in the `dist` directory.
 3. Perform swinging motions
 4. View your metrics in real-time
 
+## Deployment
+
+### GitHub Pages
+
+This project is set up for automatic deployment to GitHub Pages:
+
+1. When you push to the `main` branch, a GitHub Actions workflow will:
+   - Build the application
+   - Deploy it to the `gh-pages` branch
+   - Make it available on GitHub Pages
+
+2. The deployed application will be available at:
+   ```
+   https://<username>.github.io/<repository-name>/
+   ```
+
+3. For detailed deployment instructions, see [DEPLOY.md](./DEPLOY.md)
+
 ## How It Works
 
 The application uses TensorFlow.js with the MoveNet pose detection model, which is optimized for mobile devices. It analyzes the angle of your spine relative to vertical and counts a rep when you go from a hinged position (bent forward) to an upright position.
