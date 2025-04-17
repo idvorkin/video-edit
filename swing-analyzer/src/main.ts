@@ -13,6 +13,9 @@ const repCounter = document.getElementById('rep-counter') as HTMLSpanElement;
 const status = document.getElementById('status') as HTMLDivElement;
 const spineAngle = document.getElementById('spine-angle') as HTMLSpanElement;
 const displayModeRadios = document.querySelectorAll('input[name="display-mode"]') as NodeListOf<HTMLInputElement>;
+const showKeypointsBtn = document.getElementById('show-keypoints-btn') as HTMLButtonElement;
+const keypointData = document.getElementById('keypoint-data') as HTMLDivElement;
+const keypointContainer = document.getElementById('keypoint-container') as HTMLDivElement;
 
 // Application state
 const appState: AppState = {
@@ -32,6 +35,9 @@ const appState: AppState = {
 // Create swing analyzer
 let swingAnalyzer: SwingAnalyzer | null = null;
 
+// Create a global variable to store keypoint data
+let latestKeypoints: any[] = [];
+
 // Initialize the application
 async function initApp() {
   updateStatus('Loading model...');
@@ -49,20 +55,55 @@ function setupVideoCanvas() {
   // Make sure canvas has the same dimensions as video
   function updateDimensions() {
     if (video.videoWidth && video.videoHeight) {
+      // Set canvas dimensions to match video's intrinsic dimensions
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       
-      // Make sure video is visible
+      // Check if video is portrait orientation (vertical)
+      const isPortrait = video.videoHeight > video.videoWidth;
+      
+      // Update container class based on orientation
+      const videoContainer = video.parentElement;
+      if (videoContainer) {
+        videoContainer.classList.remove('video-portrait', 'video-landscape');
+        videoContainer.classList.add(isPortrait ? 'video-portrait' : 'video-landscape');
+      }
+      
+      if (isPortrait) {
+        // For vertical videos, ensure the canvas and video display with correct orientation
+        // but maintain original dimensions for proper keypoint mapping
+        const containerWidth = video.parentElement?.clientWidth || 640;
+        const scale = containerWidth / video.videoWidth;
+        
+        // Set display size while maintaining aspect ratio
+        video.style.width = `${containerWidth}px`;
+        video.style.height = `${video.videoHeight * scale}px`;
+        
+        // Canvas should match the video's display size
+        canvas.style.width = `${containerWidth}px`;
+        canvas.style.height = `${video.videoHeight * scale}px`;
+      } else {
+        // For landscape videos, let the video and canvas fill the container width
+        video.style.width = '100%';
+        video.style.height = 'auto';
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
+      }
+      
+      // Make sure video and canvas are visible
       video.style.display = 'block';
       canvas.style.display = 'block';
       
-      console.log(`Video dimensions set: ${video.videoWidth}x${video.videoHeight}`);
+      console.log(`Video dimensions set: ${video.videoWidth}x${video.videoHeight}, Portrait: ${isPortrait}`);
     }
   }
   
   // Add listeners for dimension updates
   video.addEventListener('loadedmetadata', updateDimensions);
   video.addEventListener('resize', updateDimensions);
+  
+  // Also update when window is resized
+  window.addEventListener('resize', updateDimensions);
   
   // Set initial dimensions
   if (video.videoWidth && video.videoHeight) {
@@ -115,6 +156,9 @@ function setupEventListeners() {
     }
   });
   
+  // Show/hide keypoint data button
+  showKeypointsBtn.addEventListener('click', toggleKeypointData);
+  
   // Add debug controls
   setupDebugControls();
 }
@@ -154,11 +198,23 @@ function setupDebugControls() {
 
 async function initializeAnalyzer() {
   if (!swingAnalyzer) {
+    // Reset dimensions - make sure canvas matches video at initialization time
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    
+    // Make sure canvas has the exact same size as video for correct positioning
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    
     swingAnalyzer = new SwingAnalyzer(
       video, 
       canvas, 
       appState.showBodyParts,
-      appState.bodyPartDisplayTime
+      appState.bodyPartDisplayTime,
+      updateLatestKeypoints
     );
     
     try {
@@ -323,6 +379,68 @@ function stopCamera() {
   
   appState.usingCamera = false;
   updateButtonStates(true, false, false);
+}
+
+// Toggle keypoint data visibility
+function toggleKeypointData() {
+  if (keypointData.style.display === 'none') {
+    keypointData.style.display = 'block';
+    showKeypointsBtn.textContent = 'Hide Keypoint Data';
+    updateKeypointDisplay();
+  } else {
+    keypointData.style.display = 'none';
+    showKeypointsBtn.textContent = 'Show Keypoint Data';
+  }
+}
+
+// Update keypoint display with latest data
+function updateKeypointDisplay() {
+  if (!latestKeypoints.length || keypointData.style.display === 'none') {
+    return;
+  }
+  
+  // Clear previous data
+  keypointContainer.innerHTML = '';
+  
+  // Create header
+  const header = document.createElement('div');
+  header.className = 'keypoint-row';
+  header.innerHTML = `
+    <span><strong>Name</strong></span>
+    <span><strong>X</strong></span>
+    <span><strong>Y</strong></span>
+    <span><strong>Confidence</strong></span>
+  `;
+  keypointContainer.appendChild(header);
+  
+  // Add each keypoint row
+  latestKeypoints.forEach(kp => {
+    const row = document.createElement('div');
+    row.className = 'keypoint-row';
+    row.innerHTML = `
+      <span>${kp.name || 'unknown'}</span>
+      <span>${Math.round(kp.x)}</span>
+      <span>${Math.round(kp.y)}</span>
+      <span>${kp.confidence || 'N/A'}</span>
+    `;
+    keypointContainer.appendChild(row);
+  });
+}
+
+// Add to the SwingAnalyzer class a method to update UI keypoints
+// We need to update the SwingAnalyzer class to store and display keypoints
+
+// In main.ts, create a function to pass to SwingAnalyzer
+function updateLatestKeypoints(keypoints: any[]) {
+  latestKeypoints = keypoints.map(kp => ({
+    name: kp.name || 'unknown',
+    x: kp.x,
+    y: kp.y,
+    confidence: kp.score?.toFixed(2) || 'N/A'
+  }));
+  
+  // Update display if visible
+  updateKeypointDisplay();
 }
 
 // Start the application

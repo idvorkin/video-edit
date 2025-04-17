@@ -17,12 +17,14 @@ export class SwingAnalyzer {
   private bodyPartDisplaySeconds: number;
   private frameTimestamp = 0;
   private spineAngle = 0;
+  private keypointUpdateCallback: ((keypoints: any[]) => void) | null = null;
   
   constructor(
     video: HTMLVideoElement, 
     canvas: HTMLCanvasElement,
     showBodyParts = true,
-    bodyPartDisplaySeconds = 0.5
+    bodyPartDisplaySeconds = 0.5,
+    keypointUpdateCallback: ((keypoints: any[]) => void) | null = null
   ) {
     this.video = video;
     this.canvas = canvas;
@@ -37,6 +39,7 @@ export class SwingAnalyzer {
     };
     this.showBodyParts = showBodyParts;
     this.bodyPartDisplaySeconds = bodyPartDisplaySeconds;
+    this.keypointUpdateCallback = keypointUpdateCallback;
   }
 
   async initialize(): Promise<void> {
@@ -121,12 +124,31 @@ export class SwingAnalyzer {
         return null;
       }
       
-      // Log the first pose detection to verify data
+      // Log comprehensive information about the detected pose
       console.log(`Pose detected with ${poses[0].keypoints.length} keypoints`);
-      console.log("Sample keypoints:", 
-        poses[0].keypoints.slice(0, 3).map(kp => 
-          `(${kp.name || 'unknown'}: ${Math.round(kp.x)},${Math.round(kp.y)},${kp.score?.toFixed(2)})`
-        )
+      
+      // Create a formatted summary of key body parts
+      const bodyPartSummary = {
+        face: poses[0].keypoints.some(kp => kp.name === 'nose' && (kp.score || 0) > 0.5) ? 'Detected' : 'Not detected',
+        shoulders: poses[0].keypoints.filter(kp => 
+          (kp.name === 'left_shoulder' || kp.name === 'right_shoulder') && (kp.score || 0) > 0.5
+        ).length + '/2 detected',
+        hips: poses[0].keypoints.filter(kp => 
+          (kp.name === 'left_hip' || kp.name === 'right_hip') && (kp.score || 0) > 0.5
+        ).length + '/2 detected',
+        score: poses[0].score?.toFixed(2) || 'N/A'
+      };
+      
+      console.log('Body part summary:', bodyPartSummary);
+      
+      // Log all keypoints for debugging
+      console.log('All detected keypoints:', 
+        poses[0].keypoints.map(kp => ({
+          name: kp.name || 'unknown',
+          x: Math.round(kp.x),
+          y: Math.round(kp.y),
+          confidence: kp.score?.toFixed(2) || 'N/A'
+        }))
       );
       
       return {
@@ -140,15 +162,21 @@ export class SwingAnalyzer {
   
   // Calculate spine angle from vertical (0-180 degrees)
   calculateSpineVertical(keypoints: PoseKeypoint[]): number {
-    // Log visibility of all keypoints
-    const visibilityReport = keypoints.slice(0, 5).map((kp, i) => {
-      const name = this.getBodyPartName(i) || `point_${i}`;
+    // Log visibility of ALL keypoints, not just a sample
+    const allVisibilityReport = keypoints.map((kp, i) => {
+      const name = kp.name || this.getBodyPartName(i) || `point_${i}`;
       const confidence = kp.score !== undefined ? kp.score : 
                          kp.visibility !== undefined ? kp.visibility : 0;
+      // Format as "Name: value" for better readability in console  
       return `${name}: ${confidence.toFixed(2)}`;
-    }).join(', ');
+    });
     
-    console.log("Keypoint visibilities sample:", visibilityReport);
+    // Log each keypoint on a new line for better readability
+    console.log("ALL KEYPOINTS VISIBILITY:");
+    console.table(allVisibilityReport);
+    
+    // Also log the raw keypoints for detailed inspection
+    console.log("KEYPOINTS RAW DATA:", keypoints);
     
     // Try multiple approaches to calculate angle in order of preference
     
@@ -269,6 +297,11 @@ export class SwingAnalyzer {
   
   drawPose(pose: PoseResult, timestamp: number): void {
     if (!pose.keypoints) return;
+    
+    // Update UI with keypoint data if callback is provided
+    if (this.keypointUpdateCallback && pose.keypoints.length > 0) {
+      this.keypointUpdateCallback(pose.keypoints);
+    }
     
     const { width, height } = this.canvas;
     
@@ -445,22 +478,31 @@ export class SwingAnalyzer {
     const showLabels = this.showBodyParts && 
       ((timestamp - this.frameTimestamp) / 1000 < this.bodyPartDisplaySeconds);
     
+    // Calculate scale factors between canvas intrinsic dimensions and display size
+    const canvasElement = this.canvas;
+    const scaleX = canvasElement.width / canvasElement.clientWidth;
+    const scaleY = canvasElement.height / canvasElement.clientHeight;
+    
     // Draw larger, more visible keypoints
     for (let i = 0; i < keypoints.length; i++) {
       const point = keypoints[i];
       if (!this.isPointVisible(point)) continue;
       
+      // Transform coordinates if needed to match display size
+      const x = point.x;
+      const y = point.y;
+      
       // Add glow effect
       // Draw outer glow circle
       this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
       this.ctx.beginPath();
-      this.ctx.arc(point.x, point.y, 8, 0, 2 * Math.PI);
+      this.ctx.arc(x, y, 8, 0, 2 * Math.PI);
       this.ctx.fill();
       
       // Draw inner keypoint
       this.ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
       this.ctx.beginPath();
-      this.ctx.arc(point.x, point.y, 5, 0, 2 * Math.PI);
+      this.ctx.arc(x, y, 5, 0, 2 * Math.PI);
       this.ctx.fill();
       
       // Maybe draw the label
@@ -470,12 +512,12 @@ export class SwingAnalyzer {
           // Draw text background for better readability
           this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
           const textWidth = this.ctx.measureText(partName).width;
-          this.ctx.fillRect(point.x + 10, point.y - 10, textWidth + 6, 20);
+          this.ctx.fillRect(x + 10, y - 10, textWidth + 6, 20);
           
           // Draw text
           this.ctx.fillStyle = 'white';
           this.ctx.font = '12px Arial';
-          this.ctx.fillText(partName, point.x + 13, point.y + 5);
+          this.ctx.fillText(partName, x + 13, y + 5);
         }
       }
     }
