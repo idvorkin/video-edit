@@ -18,12 +18,10 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 16
-          cache: 'npm'
-          cache-dependency-path: './swing-analyzer/package-lock.json'
 
       - name: Install dependencies
         working-directory: ./swing-analyzer
-        run: npm ci
+        run: npm install
 
       - name: Build
         working-directory: ./swing-analyzer
