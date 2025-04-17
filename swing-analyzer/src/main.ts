@@ -1,6 +1,6 @@
 // Import application components
 import { SwingAnalyzer } from './SwingAnalyzer';
-import { AppState } from './types';
+import { AppState, CocoBodyParts } from './types';
 
 // Get DOM elements
 const video = document.getElementById('video') as HTMLVideoElement;
@@ -194,6 +194,23 @@ function setupDebugControls() {
       }
     });
   });
+  
+  // Debug mode toggle
+  const debugModeToggle = document.getElementById('debug-mode-toggle') as HTMLInputElement;
+  if (debugModeToggle) {
+    debugModeToggle.addEventListener('change', () => {
+      if (swingAnalyzer) {
+        swingAnalyzer.setDebugMode(debugModeToggle.checked);
+        
+        // Force redraw if paused
+        if (video.paused && swingAnalyzer) {
+          // If we're paused, manually trigger a redraw
+          const pose = { keypoints: latestKeypoints };
+          swingAnalyzer.drawPose(pose, performance.now());
+        }
+      }
+    });
+  }
 }
 
 async function initializeAnalyzer() {

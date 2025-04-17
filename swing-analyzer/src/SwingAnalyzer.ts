@@ -1,7 +1,7 @@
 import * as poseDetection from '@tensorflow-models/pose-detection';
 import '@tensorflow/tfjs-backend-webgl';
 import * as tf from '@tensorflow/tfjs-core';
-import { MediaPipeBodyParts, PoseKeypoint, PoseResult, RepCounter } from './types';
+import { CocoBodyParts, PoseKeypoint, PoseResult, RepCounter } from './types';
 
 export class SwingAnalyzer {
   private detector: poseDetection.PoseDetector | null = null;
@@ -18,13 +18,15 @@ export class SwingAnalyzer {
   private frameTimestamp = 0;
   private spineAngle = 0;
   private keypointUpdateCallback: ((keypoints: any[]) => void) | null = null;
+  private debugMode: boolean = false; // Debug mode flag
   
   constructor(
     video: HTMLVideoElement, 
     canvas: HTMLCanvasElement,
     showBodyParts = true,
     bodyPartDisplaySeconds = 0.5,
-    keypointUpdateCallback: ((keypoints: any[]) => void) | null = null
+    keypointUpdateCallback: ((keypoints: any[]) => void) | null = null,
+    debugMode = false
   ) {
     this.video = video;
     this.canvas = canvas;
@@ -40,6 +42,7 @@ export class SwingAnalyzer {
     this.showBodyParts = showBodyParts;
     this.bodyPartDisplaySeconds = bodyPartDisplaySeconds;
     this.keypointUpdateCallback = keypointUpdateCallback;
+    this.debugMode = debugMode;
   }
 
   async initialize(): Promise<void> {
@@ -63,10 +66,26 @@ export class SwingAnalyzer {
           detectorConfig
         );
         
-        this.canvas.width = this.video.videoWidth || 640;
-        this.canvas.height = this.video.videoHeight || 480;
+        // Check if video dimensions are available
+        if (this.video.videoWidth && this.video.videoHeight) {
+          console.log(`Video dimensions: ${this.video.videoWidth}x${this.video.videoHeight}`);
+          
+          // Set canvas internal dimensions to match video's native dimensions
+          this.canvas.width = this.video.videoWidth;
+          this.canvas.height = this.video.videoHeight;
+          
+          // Log if video is portrait orientation
+          const isPortrait = this.video.videoHeight > this.video.videoWidth;
+          console.log(`Video orientation: ${isPortrait ? 'Portrait' : 'Landscape'}`);
+        } else {
+          // Set default dimensions if video is not ready
+          console.log("Video dimensions not available, using defaults");
+          this.canvas.width = 640;
+          this.canvas.height = 480;
+        }
         
         console.log("Pose detector initialized successfully");
+        console.log(`Canvas dimensions set to: ${this.canvas.width}x${this.canvas.height}`);
         
         // Verify detector is working by running a basic test
         try {
@@ -181,10 +200,10 @@ export class SwingAnalyzer {
     // Try multiple approaches to calculate angle in order of preference
     
     // 1. First approach: Use shoulders and hips if available (best)
-    const leftShoulder = keypoints[MediaPipeBodyParts.LEFT_SHOULDER];
-    const rightShoulder = keypoints[MediaPipeBodyParts.RIGHT_SHOULDER];
-    const leftHip = keypoints[MediaPipeBodyParts.LEFT_HIP];
-    const rightHip = keypoints[MediaPipeBodyParts.RIGHT_HIP];
+    const leftShoulder = keypoints[CocoBodyParts.LEFT_SHOULDER];
+    const rightShoulder = keypoints[CocoBodyParts.RIGHT_SHOULDER];
+    const leftHip = keypoints[CocoBodyParts.LEFT_HIP];
+    const rightHip = keypoints[CocoBodyParts.RIGHT_HIP];
     
     // Safe array of points that exist and are visible
     const safeShoulders = [];
@@ -212,9 +231,9 @@ export class SwingAnalyzer {
     }
     
     // 2. Second approach: Use face orientation as fallback
-    const nose = keypoints[MediaPipeBodyParts.NOSE];
-    const leftEye = keypoints[MediaPipeBodyParts.LEFT_EYE];
-    const rightEye = keypoints[MediaPipeBodyParts.RIGHT_EYE];
+    const nose = keypoints[CocoBodyParts.NOSE];
+    const leftEye = keypoints[CocoBodyParts.LEFT_EYE];
+    const rightEye = keypoints[CocoBodyParts.RIGHT_EYE];
     
     if (nose && (leftEye || rightEye) && this.isPointVisible(nose)) {
       // Use visible eye, or average of both if available
@@ -308,6 +327,11 @@ export class SwingAnalyzer {
     // Clear canvas with transparent background
     this.ctx.clearRect(0, 0, width, height);
     
+    // In debug mode, draw canvas dimensions and coordinate grid
+    if (this.debugMode) {
+      this.drawDebugInfo(width, height);
+    }
+    
     // Calculate FPS
     if (this.startTime === 0) {
       this.startTime = timestamp;
@@ -378,43 +402,54 @@ export class SwingAnalyzer {
     // Connection pairs for essential skeleton
     const connections = [
       // Torso
-      [MediaPipeBodyParts.LEFT_SHOULDER, MediaPipeBodyParts.RIGHT_SHOULDER],
-      [MediaPipeBodyParts.LEFT_SHOULDER, MediaPipeBodyParts.LEFT_HIP],
-      [MediaPipeBodyParts.RIGHT_SHOULDER, MediaPipeBodyParts.RIGHT_HIP],
-      [MediaPipeBodyParts.LEFT_HIP, MediaPipeBodyParts.RIGHT_HIP],
+      [CocoBodyParts.LEFT_SHOULDER, CocoBodyParts.RIGHT_SHOULDER],
+      [CocoBodyParts.LEFT_SHOULDER, CocoBodyParts.LEFT_HIP],
+      [CocoBodyParts.RIGHT_SHOULDER, CocoBodyParts.RIGHT_HIP],
+      [CocoBodyParts.LEFT_HIP, CocoBodyParts.RIGHT_HIP],
       
       // Arms
-      [MediaPipeBodyParts.LEFT_SHOULDER, MediaPipeBodyParts.LEFT_ELBOW],
-      [MediaPipeBodyParts.LEFT_ELBOW, MediaPipeBodyParts.LEFT_WRIST],
-      [MediaPipeBodyParts.RIGHT_SHOULDER, MediaPipeBodyParts.RIGHT_ELBOW],
-      [MediaPipeBodyParts.RIGHT_ELBOW, MediaPipeBodyParts.RIGHT_WRIST],
+      [CocoBodyParts.LEFT_SHOULDER, CocoBodyParts.LEFT_ELBOW],
+      [CocoBodyParts.LEFT_ELBOW, CocoBodyParts.LEFT_WRIST],
+      [CocoBodyParts.RIGHT_SHOULDER, CocoBodyParts.RIGHT_ELBOW],
+      [CocoBodyParts.RIGHT_ELBOW, CocoBodyParts.RIGHT_WRIST],
       
       // Legs
-      [MediaPipeBodyParts.LEFT_HIP, MediaPipeBodyParts.LEFT_KNEE],
-      [MediaPipeBodyParts.LEFT_KNEE, MediaPipeBodyParts.LEFT_ANKLE],
-      [MediaPipeBodyParts.RIGHT_HIP, MediaPipeBodyParts.RIGHT_KNEE],
-      [MediaPipeBodyParts.RIGHT_KNEE, MediaPipeBodyParts.RIGHT_ANKLE],
+      [CocoBodyParts.LEFT_HIP, CocoBodyParts.LEFT_KNEE],
+      [CocoBodyParts.LEFT_KNEE, CocoBodyParts.LEFT_ANKLE],
+      [CocoBodyParts.RIGHT_HIP, CocoBodyParts.RIGHT_KNEE],
+      [CocoBodyParts.RIGHT_KNEE, CocoBodyParts.RIGHT_ANKLE],
     ];
     
     // Draw lines between connected keypoints
     this.ctx.lineWidth = 4;
     
+    // DRAW SPINE FIRST (so it's underneath other connections)
     // Get keypoints needed for spine with safety checks
-    const leftShoulder = keypoints[MediaPipeBodyParts.LEFT_SHOULDER];
-    const rightShoulder = keypoints[MediaPipeBodyParts.RIGHT_SHOULDER];
-    const leftHip = keypoints[MediaPipeBodyParts.LEFT_HIP];
-    const rightHip = keypoints[MediaPipeBodyParts.RIGHT_HIP];
+    const leftShoulder = keypoints[CocoBodyParts.LEFT_SHOULDER];
+    const rightShoulder = keypoints[CocoBodyParts.RIGHT_SHOULDER];
+    const leftHip = keypoints[CocoBodyParts.LEFT_HIP];
+    const rightHip = keypoints[CocoBodyParts.RIGHT_HIP];
     
-    // Safe array of points that exist and are visible
+    // Special function to check if a point is visible with lower threshold for spine
+    const isPointVisibleForSpine = (point: PoseKeypoint): boolean => {
+      if (!point) return false;
+      const confidence = point.score !== undefined ? point.score : 
+                         point.visibility !== undefined ? point.visibility : 0;
+      return confidence > 0.1; // Lower threshold specifically for spine
+    };
+    
+    // Safe array of points that exist and are visible using the spine-specific threshold
     const safePoints = [];
-    if (leftShoulder && this.isPointVisible(leftShoulder)) safePoints.push(leftShoulder);
-    if (rightShoulder && this.isPointVisible(rightShoulder)) safePoints.push(rightShoulder);
-    if (leftHip && this.isPointVisible(leftHip)) safePoints.push(leftHip);
-    if (rightHip && this.isPointVisible(rightHip)) safePoints.push(rightHip);
+    if (leftShoulder && isPointVisibleForSpine(leftShoulder)) safePoints.push(leftShoulder);
+    if (rightShoulder && isPointVisibleForSpine(rightShoulder)) safePoints.push(rightShoulder);
+    if (leftHip && isPointVisibleForSpine(leftHip)) safePoints.push(leftHip);
+    if (rightHip && isPointVisibleForSpine(rightHip)) safePoints.push(rightHip);
     
     // We need at least one shoulder and one hip to draw spine
     const hasAnyShoulder = safePoints.includes(leftShoulder) || safePoints.includes(rightShoulder);
     const hasAnyHip = safePoints.includes(leftHip) || safePoints.includes(rightHip);
+    
+    console.log("Spine drawing - shoulders visible:", hasAnyShoulder, "hips visible:", hasAnyHip);
     
     if (hasAnyShoulder && hasAnyHip) {
       // Calculate midpoints using only available points
@@ -438,13 +473,15 @@ export class SwingAnalyzer {
       const shoulderMidpoint = { x: shoulderX, y: shoulderY };
       const hipMidpoint = { x: hipX, y: hipY };
       
-      // Change color based on angle
+      console.log("Drawing spine from", shoulderMidpoint, "to", hipMidpoint);
+      
+      // Change color based on angle and make more visible
       if (this.spineAngle < this.repCounter.hingeThreshold) {
-        this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)'; // Hinged - semi-transparent red
-        this.ctx.lineWidth = 6; // Make spine line thicker
+        this.ctx.strokeStyle = 'rgba(255, 0, 0, 1.0)'; // Hinged - solid red (no transparency)
+        this.ctx.lineWidth = 8; // Make spine line even thicker
       } else {
-        this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)'; // Straight - semi-transparent green
-        this.ctx.lineWidth = 6; // Make spine line thicker
+        this.ctx.strokeStyle = 'rgba(0, 255, 0, 1.0)'; // Straight - solid green (no transparency)
+        this.ctx.lineWidth = 8; // Make spine line even thicker
       }
       
       // Draw spine line
@@ -492,31 +529,48 @@ export class SwingAnalyzer {
       const x = point.x;
       const y = point.y;
       
+      // Important keypoints (shoulders and hips) get emphasized with larger circles
+      const isSpinePoint = (
+        i === CocoBodyParts.LEFT_SHOULDER || 
+        i === CocoBodyParts.RIGHT_SHOULDER ||
+        i === CocoBodyParts.LEFT_HIP || 
+        i === CocoBodyParts.RIGHT_HIP
+      );
+      
+      const outerRadius = isSpinePoint ? 12 : 8;
+      const innerRadius = isSpinePoint ? 8 : 5;
+      
       // Add glow effect
       // Draw outer glow circle
-      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      this.ctx.fillStyle = isSpinePoint ? 
+        'rgba(255, 255, 255, 0.5)' :  // More visible for spine points
+        'rgba(255, 255, 255, 0.3)';   // Standard for other points
+      
       this.ctx.beginPath();
-      this.ctx.arc(x, y, 8, 0, 2 * Math.PI);
+      this.ctx.arc(x, y, outerRadius, 0, 2 * Math.PI);
       this.ctx.fill();
       
       // Draw inner keypoint
-      this.ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+      this.ctx.fillStyle = isSpinePoint ? 
+        'rgba(255, 165, 0, 1.0)' :     // Orange for spine points
+        'rgba(255, 255, 0, 0.8)';      // Yellow for other points
+      
       this.ctx.beginPath();
-      this.ctx.arc(x, y, 5, 0, 2 * Math.PI);
+      this.ctx.arc(x, y, innerRadius, 0, 2 * Math.PI);
       this.ctx.fill();
       
       // Maybe draw the label
-      if (showLabels) {
+      if (showLabels || isSpinePoint) {  // Always show labels for spine points
         const partName = this.getBodyPartName(i);
         if (partName) {
           // Draw text background for better readability
-          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';  // More opaque background
           const textWidth = this.ctx.measureText(partName).width;
           this.ctx.fillRect(x + 10, y - 10, textWidth + 6, 20);
           
           // Draw text
           this.ctx.fillStyle = 'white';
-          this.ctx.font = '12px Arial';
+          this.ctx.font = isSpinePoint ? 'bold 12px Arial' : '12px Arial';
           this.ctx.fillText(partName, x + 13, y + 5);
         }
       }
@@ -526,19 +580,19 @@ export class SwingAnalyzer {
   getBodyPartName(index: number): string {
     // Return friendly names for the key body parts
     const names: { [key: number]: string } = {
-      [MediaPipeBodyParts.NOSE]: 'Nose',
-      [MediaPipeBodyParts.LEFT_SHOULDER]: 'L.Shoulder',
-      [MediaPipeBodyParts.RIGHT_SHOULDER]: 'R.Shoulder',
-      [MediaPipeBodyParts.LEFT_ELBOW]: 'L.Elbow',
-      [MediaPipeBodyParts.RIGHT_ELBOW]: 'R.Elbow',
-      [MediaPipeBodyParts.LEFT_WRIST]: 'L.Wrist',
-      [MediaPipeBodyParts.RIGHT_WRIST]: 'R.Wrist',
-      [MediaPipeBodyParts.LEFT_HIP]: 'L.Hip',
-      [MediaPipeBodyParts.RIGHT_HIP]: 'R.Hip',
-      [MediaPipeBodyParts.LEFT_KNEE]: 'L.Knee',
-      [MediaPipeBodyParts.RIGHT_KNEE]: 'R.Knee',
-      [MediaPipeBodyParts.LEFT_ANKLE]: 'L.Ankle',
-      [MediaPipeBodyParts.RIGHT_ANKLE]: 'R.Ankle',
+      [CocoBodyParts.NOSE]: 'Nose',
+      [CocoBodyParts.LEFT_SHOULDER]: 'L.Shoulder',
+      [CocoBodyParts.RIGHT_SHOULDER]: 'R.Shoulder',
+      [CocoBodyParts.LEFT_ELBOW]: 'L.Elbow',
+      [CocoBodyParts.RIGHT_ELBOW]: 'R.Elbow',
+      [CocoBodyParts.LEFT_WRIST]: 'L.Wrist',
+      [CocoBodyParts.RIGHT_WRIST]: 'R.Wrist',
+      [CocoBodyParts.LEFT_HIP]: 'L.Hip',
+      [CocoBodyParts.RIGHT_HIP]: 'R.Hip',
+      [CocoBodyParts.LEFT_KNEE]: 'L.Knee',
+      [CocoBodyParts.RIGHT_KNEE]: 'R.Knee',
+      [CocoBodyParts.LEFT_ANKLE]: 'L.Ankle',
+      [CocoBodyParts.RIGHT_ANKLE]: 'R.Ankle',
     };
     
     return names[index] || '';
@@ -605,5 +659,60 @@ export class SwingAnalyzer {
   setBodyPartDisplay(show: boolean, seconds: number): void {
     this.showBodyParts = show;
     this.bodyPartDisplaySeconds = seconds;
+  }
+  
+  // New method to draw debug information
+  drawDebugInfo(width: number, height: number): void {
+    // Draw canvas border to visualize boundaries
+    this.ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(0, 0, width, height);
+    
+    // Draw coordinate crosshairs at center
+    const centerX = width / 2;
+    const centerY = height / 2;
+    
+    this.ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)';
+    this.ctx.beginPath();
+    this.ctx.moveTo(centerX, 0);
+    this.ctx.lineTo(centerX, height);
+    this.ctx.moveTo(0, centerY);
+    this.ctx.lineTo(width, centerY);
+    this.ctx.stroke();
+    
+    // Draw dimensions text
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillRect(5, height - 25, 150, 20);
+    this.ctx.fillStyle = 'white';
+    this.ctx.font = '12px monospace';
+    this.ctx.fillText(`Canvas: ${width}x${height}`, 10, height - 10);
+    
+    // Add video dimensions
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillRect(5, height - 50, 250, 20);
+    this.ctx.fillStyle = 'white';
+    this.ctx.fillText(`Video: ${this.video.videoWidth}x${this.video.videoHeight}`, 10, height - 35);
+    
+    // Draw quadrant labels
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    this.ctx.fillRect(5, 5, 50, 25);
+    this.ctx.fillStyle = 'white';
+    this.ctx.fillText('(0,0)', 10, 20);
+    
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    this.ctx.fillRect(width - 55, 5, 50, 25);
+    this.ctx.fillStyle = 'white';
+    this.ctx.fillText(`(${width},0)`, width - 50, 20);
+    
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    this.ctx.fillRect(5, height - 75, 100, 25);
+    this.ctx.fillStyle = 'white';
+    this.ctx.fillText(`(0,${height})`, 10, height - 60);
+  }
+  
+  // Add setter for debug mode
+  setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
+    console.log(`Debug mode ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
