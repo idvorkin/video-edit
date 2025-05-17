@@ -65,9 +65,25 @@ The built files will be available in the `dist` directory.
 
 ## Deployment
 
+### Vercel (Recommended)
+
+This project is configured for easy deployment to Vercel:
+
+1. Push your code to GitHub
+2. Import your repository in the Vercel dashboard
+3. Vercel will automatically detect and configure the build settings
+4. Click "Deploy"
+
+For detailed instructions, see [VERCEL_DEPLOY.md](./VERCEL_DEPLOY.md)
+
+Alternatively, use our deployment script:
+```bash
+./deploy-to-vercel.sh
+```
+
 ### GitHub Pages
 
-This project is set up for automatic deployment to GitHub Pages:
+This project is also set up for automatic deployment to GitHub Pages:
 
 1. When you push to the `main` branch, a GitHub Actions workflow will:
    - Build the application

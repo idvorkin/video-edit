@@ -32,3 +32,4 @@ yarn-error.log*
 /build 
 # SpecStory explanation file
 .specstory/.what-is-this.md
+.vercel
