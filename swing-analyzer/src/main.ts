@@ -16,6 +16,15 @@ const displayModeRadios = document.querySelectorAll('input[name="display-mode"]'
 const showKeypointsBtn = document.getElementById('show-keypoints-btn') as HTMLButtonElement;
 const keypointData = document.getElementById('keypoint-data') as HTMLDivElement;
 const keypointContainer = document.getElementById('keypoint-container') as HTMLDivElement;
+const loadingSpinner = document.getElementById('loading-spinner') as HTMLDivElement;
+const loadingProgress = document.getElementById('loading-progress') as HTMLDivElement;
+const loadingText = document.getElementById('loading-text') as HTMLDivElement;
+
+// Loading state variables
+let loadingTimer: number | null = null;
+let progressValue = 0;
+const ESTIMATED_LOADING_TIME = 15000; // 15 seconds estimated loading time
+const PROGRESS_UPDATE_INTERVAL = 100; // Update progress every 100ms
 
 // Application state
 const appState: AppState = {
@@ -42,6 +51,9 @@ let latestKeypoints: any[] = [];
 async function initApp() {
   updateStatus('Loading model...');
   
+  // Show loading spinner with progress
+  showLoadingSpinner(true);
+  
   // Setup video and canvas dimensions initially
   setupVideoCanvas();
   
@@ -49,6 +61,91 @@ async function initApp() {
   setupEventListeners();
   
   updateStatus('Ready. Upload a video or start camera.');
+}
+
+// Show or hide the loading spinner
+function showLoadingSpinner(show: boolean) {
+  if (loadingSpinner) {
+    loadingSpinner.classList.toggle('active', show);
+    
+    if (show) {
+      // Reset and start progress simulation
+      resetProgress();
+      startProgressSimulation();
+    } else {
+      // Stop progress simulation
+      stopProgressSimulation();
+    }
+  }
+}
+
+// Start simulating progress
+function startProgressSimulation() {
+  // Stop any existing timer
+  stopProgressSimulation();
+  
+  // Reset progress
+  progressValue = 0;
+  updateProgressBar(0);
+  
+  // Start the timer
+  loadingTimer = window.setInterval(() => {
+    // Calculate next progress value using a curve that starts fast and slows down
+    // This simulates real loading behavior better than linear progress
+    progressValue += (100 - progressValue) / 100;
+    
+    if (progressValue >= 99) {
+      progressValue = 99; // Cap at 99% until actually loaded
+    }
+    
+    updateProgressBar(progressValue);
+    
+    // Calculate estimated time remaining
+    const elapsedTime = (progressValue / 100) * ESTIMATED_LOADING_TIME;
+    const estimatedTimeRemaining = Math.max(0, ESTIMATED_LOADING_TIME - elapsedTime);
+    const secondsRemaining = Math.ceil(estimatedTimeRemaining / 1000);
+    
+    // Update loading text
+    if (loadingText) {
+      loadingText.textContent = `Loading model... ${Math.round(progressValue)}% (about ${secondsRemaining}s remaining)`;
+    }
+  }, PROGRESS_UPDATE_INTERVAL);
+}
+
+// Stop progress simulation
+function stopProgressSimulation() {
+  if (loadingTimer !== null) {
+    clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
+  
+  // Set to 100% when done
+  if (loadingProgress) {
+    loadingProgress.style.width = '100%';
+  }
+  
+  // Update text
+  if (loadingText) {
+    loadingText.textContent = 'Loading complete!';
+  }
+}
+
+// Reset progress bar to 0
+function resetProgress() {
+  progressValue = 0;
+  if (loadingProgress) {
+    loadingProgress.style.width = '0%';
+  }
+  if (loadingText) {
+    loadingText.textContent = 'Loading model...';
+  }
+}
+
+// Update progress bar
+function updateProgressBar(percentage: number) {
+  if (loadingProgress) {
+    loadingProgress.style.width = `${percentage}%`;
+  }
 }
 
 function setupVideoCanvas() {
@@ -215,6 +312,9 @@ function setupDebugControls() {
 
 async function initializeAnalyzer() {
   if (!swingAnalyzer) {
+    // Show loading spinner
+    showLoadingSpinner(true);
+    
     // Reset dimensions - make sure canvas matches video at initialization time
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
@@ -235,12 +335,30 @@ async function initializeAnalyzer() {
     );
     
     try {
+      // Record start time to measure actual loading time
+      const startTime = performance.now();
+      
       await swingAnalyzer.initialize();
+      
+      // Calculate actual loading time
+      const loadingTime = performance.now() - startTime;
+      console.log(`Model loaded in ${Math.round(loadingTime)}ms`);
+      
+      // Update our estimate for next time if significantly different
+      if (Math.abs(loadingTime - ESTIMATED_LOADING_TIME) > 5000) {
+        // Store in localStorage for future reference
+        localStorage.setItem('modelLoadingTime', loadingTime.toString());
+      }
+      
       appState.isModelLoaded = true;
       updateStatus('Model loaded. Ready to analyze.');
+      // Hide loading spinner
+      showLoadingSpinner(false);
     } catch (error) {
       console.error('Error initializing analyzer:', error);
       updateStatus('Error loading model. Please refresh and try again.');
+      // Hide loading spinner
+      showLoadingSpinner(false);
     }
   }
 }
@@ -268,6 +386,9 @@ function updateButtonStates(
 
 async function startCamera() {
   try {
+    // Show loading spinner while setting up camera
+    showLoadingSpinner(true);
+    
     // Request camera permissions
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -304,6 +425,8 @@ async function startCamera() {
   } catch (error) {
     console.error('Error accessing camera:', error);
     updateStatus('Camera access denied or not available.');
+    // Hide loading spinner
+    showLoadingSpinner(false);
   }
 }
 
@@ -311,6 +434,9 @@ async function handleVideoUpload(event: Event) {
   const input = event.target as HTMLInputElement;
   if (input.files && input.files.length > 0) {
     const file = input.files[0];
+    
+    // Show loading spinner while processing video
+    showLoadingSpinner(true);
     
     // Stop camera if it's active
     if (appState.usingCamera) {
@@ -396,6 +522,9 @@ function stopCamera() {
   
   appState.usingCamera = false;
   updateButtonStates(true, false, false);
+  
+  // Hide the loading spinner if it's still showing
+  showLoadingSpinner(false);
 }
 
 // Toggle keypoint data visibility

@@ -30,3 +30,5 @@ yarn-error.log*
 
 # Build files
 /build 
+# SpecStory explanation file
+.specstory/.what-is-this.md
